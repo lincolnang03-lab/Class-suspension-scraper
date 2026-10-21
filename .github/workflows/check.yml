@@ -1,0 +1,41 @@
+name: Check for class suspensions
+
+on:
+  schedule:
+    # GitHub runs schedules in UTC; the Philippines is UTC+8. Minutes are offset from :00/:30,
+    # when GitHub's scheduler is busiest and runs start late.
+    - cron: "7,37 8-22 * * *"   # every 30 min, 4:07 PM – 6:37 AM PH (when announcements come out)
+    - cron: "7 23,0-7 * * *"    # hourly, 7:07 AM – 3:07 PM PH
+  workflow_dispatch: {}         # "Run workflow" button, for a check right now
+
+concurrency:
+  group: live-check             # never two checks at once: each one builds on the last one's state
+  cancel-in-progress: false
+
+permissions:
+  contents: write               # to save live/ back to the repo
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Check the news
+        run: python live.py run
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      - name: Save the results
+        run: |
+          git config user.name "walang-pasok-checker"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add live/
+          if git diff --cached --quiet; then echo "Nothing changed"; exit 0; fi
+          git commit -m "Live check $(date -u +%Y-%m-%dT%H:%MZ)"
+          git pull --rebase --quiet
+          git push

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Walang Pasok?</title>
+<meta name="description" content="Is there class tomorrow? Class suspensions for every city and town in the Philippines, checked from the news every 30 minutes.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+<script>
+  // Where the scheduled checker publishes its results. Empty = use data.json next to this page.
+  window.LIVE_DATA_URL = "";
+</script>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <h1>Walang Pasok?</h1>
+    <p class="lede">Class suspensions for every city and town in the Philippines, checked from the news every 30 minutes.</p>
+    <p class="checked" id="checked" aria-live="polite">Loading…</p>
+    <p class="banner" id="banner" hidden></p>
+  </header>
+
+  <section class="panel" aria-label="Your place and day">
+    <label class="field" for="place">
+      <span>Your city or town</span>
+      <input id="place" list="places" autocomplete="off" placeholder="Start typing, e.g. Marikina or Malolos" spellcheck="false">
+      <datalist id="places"></datalist>
+    </label>
+
+    <div class="field">
+      <span>Your child's level <em>(optional)</em></span>
+      <div class="chips" id="levels" role="group" aria-label="School level"></div>
+    </div>
+
+    <div class="days" id="days" role="group" aria-label="Day"></div>
+  </section>
+
+  <section class="answer" id="answer" aria-live="polite"></section>
+
+  <section class="list" aria-labelledby="list-title">
+    <div class="list-head">
+      <h2 id="list-title">All suspensions</h2>
+      <p class="muted" id="list-sub"></p>
+    </div>
+    <div id="list"></div>
+  </section>
+
+  <footer class="footer">
+    <p><b>Always confirm with your city or school.</b> This page reads the news (<span id="outlets">Rappler, Bombo Radyo, SunStar</span>), so an announcement posted on Facebook usually shows up here 15 to 60 minutes later, and one the news never picked up won't show at all. “No suspension announced yet” is not a promise that there is class.</p>
+    <p>How sure we are: <b>strong</b> = reported by 2 or more major outlets, or 1 major plus another; <b>good</b> = 1 major outlet (Rappler, GMA, ABS-CBN, Inquirer, Philstar, PNA, DepEd…); <b>check it</b> = only a regional outlet so far, or details are missing.</p>
+  </footer>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+# Secrets
+.env
+.vercel/
+# Local only: notebooks, guide, old datasets and month-by-month trial runs
+*.ipynb
+*.docx
+class_suspensions_*.json
+trial/
+__pycache__/
+.DS_Store
+# The site reads live data from this repo; a data.json next to the page is only for local testing
+trial_dashboard/data.json
