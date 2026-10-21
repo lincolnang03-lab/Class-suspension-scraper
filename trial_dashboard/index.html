@@ -3,57 +3,125 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Walang Pasok?</title>
-<meta name="description" content="Is there class tomorrow? Class suspensions for every city and town in the Philippines, checked from the news every 30 minutes.">
+<title>Lost School Days</title>
+<meta name="description" content="Class suspensions in the Philippines since 2023: where and why school days are lost, what is coming up, and what the seasons suggest.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="exec.css">
 <script>
-  // Where the scheduled checker publishes its results. Empty = use data.json next to this page.
+  // Where the scheduled checker publishes upcoming suspensions. Empty = data.json next to this page.
   window.LIVE_DATA_URL = "";
 </script>
 </head>
 <body>
 <div class="page">
 
-  <header>
-    <h1>Walang Pasok?</h1>
-    <p class="lede">Class suspensions for every city and town in the Philippines, checked from the news every 30 minutes.</p>
-    <p class="checked" id="checked" aria-live="polite">Loading…</p>
-    <p class="banner" id="banner" hidden></p>
+  <header class="top">
+    <div>
+      <p class="kicker">Philippines · basic and higher education</p>
+      <h1>Lost School Days</h1>
+      <p class="lede" id="lede">Every class suspension announced by a city, town, province or Malacañang since 2023: where school days are lost, why, and what is coming up.</p>
+    </div>
+    <a class="check-link" href="check.html">Check a city or town →</a>
   </header>
 
-  <section class="panel" aria-label="Your place and day">
-    <label class="field" for="place">
-      <span>Your city or town</span>
-      <input id="place" list="places" autocomplete="off" placeholder="Start typing, e.g. Marikina or Malolos" spellcheck="false">
-      <datalist id="places"></datalist>
-    </label>
-
-    <div class="field">
-      <span>Your child's level <em>(optional)</em></span>
-      <div class="chips" id="levels" role="group" aria-label="School level"></div>
+  <!-- Upcoming: from the live checker -->
+  <section class="card now" aria-labelledby="now-title">
+    <div class="card-head">
+      <h2 id="now-title">Now and next</h2>
+      <p class="muted" id="now-checked">Loading the latest check…</p>
     </div>
-
-    <div class="days" id="days" role="group" aria-label="Day"></div>
+    <div class="now-days" id="now-days"></div>
+    <p class="banner" id="now-banner" hidden></p>
   </section>
 
-  <section class="answer" id="answer" aria-live="polite"></section>
-
-  <section class="list" aria-labelledby="list-title">
-    <div class="list-head">
-      <h2 id="list-title">All suspensions</h2>
-      <p class="muted" id="list-sub"></p>
-    </div>
-    <div id="list"></div>
+  <!-- Filters -->
+  <section class="filters" aria-label="Filters">
+    <div class="seg" id="f-year" role="group" aria-label="Year"></div>
+    <label class="field"><span>Region</span><select id="f-region"></select></label>
   </section>
 
-  <footer class="footer">
-    <p><b>Always confirm with your city or school.</b> This page reads the news (<span id="outlets">Rappler, Bombo Radyo, SunStar</span>), so an announcement posted on Facebook usually shows up here 15 to 60 minutes later, and one the news never picked up won't show at all. “No suspension announced yet” is not a promise that there is class.</p>
-    <p>How sure we are: <b>strong</b> = reported by 2 or more major outlets, or 1 major plus another; <b>good</b> = 1 major outlet (Rappler, GMA, ABS-CBN, Inquirer, Philstar, PNA, DepEd…); <b>check it</b> = only a regional outlet so far, or details are missing.</p>
-  </footer>
+  <section class="kpis" id="kpis" aria-label="Key figures"></section>
+
+  <section class="card" aria-labelledby="findings-title">
+    <div class="card-head"><h2 id="findings-title">What the data shows</h2></div>
+    <ul class="findings" id="findings"></ul>
+  </section>
+
+  <section class="card" aria-labelledby="timeline-title">
+    <div class="card-head row">
+      <div>
+        <h2 id="timeline-title">When suspensions happen</h2>
+        <p class="muted" id="timeline-sub"></p>
+      </div>
+      <div class="seg small" id="f-metric" role="group" aria-label="Measure"></div>
+    </div>
+    <div class="chart tall"><canvas id="c-timeline" role="img" aria-label="Suspensions by month and cause"></canvas></div>
+  </section>
+
+  <div class="two">
+    <section class="card" aria-labelledby="cause-title">
+      <div class="card-head"><h2 id="cause-title">Why classes were suspended</h2><p class="muted">School days with suspensions, by the cause the announcements gave.</p></div>
+      <div class="chart"><canvas id="c-cause" role="img" aria-label="Days by cause"></canvas></div>
+    </section>
+    <section class="card" aria-labelledby="season-title">
+      <div class="card-head"><h2 id="season-title">The season ahead</h2><p class="muted" id="season-sub"></p></div>
+      <div class="chart"><canvas id="c-season" role="img" aria-label="Average suspension days per month"></canvas></div>
+      <p class="outlook" id="outlook"></p>
+    </section>
+  </div>
+
+  <section class="card" aria-labelledby="prov-title">
+    <div class="card-head row">
+      <div>
+        <h2 id="prov-title">Where school days are lost</h2>
+        <p class="muted">Provinces by the number of school days on which at least one of their LGUs suspended classes.</p>
+      </div>
+      <button type="button" class="btn" id="dl-prov">Download CSV</button>
+    </div>
+    <div class="table-wrap"><table class="tbl" id="t-prov"></table></div>
+    <button type="button" class="more" id="prov-more" hidden></button>
+  </section>
+
+  <div class="two">
+    <section class="card" aria-labelledby="events-title">
+      <div class="card-head"><h2 id="events-title">Biggest events</h2><p class="muted">Storms and other events that suspended classes in the most places.</p></div>
+      <div class="table-wrap"><table class="tbl" id="t-events"></table></div>
+    </section>
+    <section class="card" aria-labelledby="levels-title">
+      <div class="card-head"><h2 id="levels-title">What kind of suspension</h2><p class="muted">Share of LGU suspensions.</p></div>
+      <div class="bars" id="levels"></div>
+    </section>
+  </div>
+
+  <section class="card method" aria-labelledby="method-title">
+    <div class="card-head row">
+      <h2 id="method-title">How these numbers are made</h2>
+      <button type="button" class="btn" id="dl-all">Download all records (CSV)</button>
+    </div>
+    <div class="method-grid">
+      <div>
+        <h3>Past suspensions</h3>
+        <p>Every place listed in Rappler's daily <i>#WalangPasok</i> roundups, read automatically and checked against the official PSGC list of provinces, cities and towns. The cause of each day comes from the roundup's own opening line (for example “due to Tropical Storm Enteng”).</p>
+        <p><b>LGU suspension</b> = one city, town or province suspending classes for one day. <b>School days with suspensions</b> = calendar days on which at least one LGU in the selected area did. A province's count includes days when only some of its towns suspended.</p>
+      </div>
+      <div>
+        <h3>Limits</h3>
+        <p>These are a <b>lower bound</b>. Rappler compiles roundups on days with widespread suspensions, so single-town suspensions (floods, bomb threats, local heat) are often missing: in a July 2024 test, reading three outlets found about 50% more suspended places than Rappler's lists alone. 2023 has fewer roundups than later years, so year-to-year rises are partly better coverage.</p>
+        <p>“Face-to-face only” suspensions moved classes to modular or online learning instead of cancelling them.</p>
+      </div>
+      <div>
+        <h3>Upcoming suspensions</h3>
+        <p>Read from Rappler, Bombo Radyo and SunStar news every 30 minutes in the evening and early morning, by an AI reader that quotes the article for every place it lists. “The season ahead” is the 2023–2025 average for each month, not a forecast.</p>
+        <p id="coverage"></p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer" id="footer"></footer>
 </div>
-<script src="app.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="exec.js"></script>
 </body>
 </html>

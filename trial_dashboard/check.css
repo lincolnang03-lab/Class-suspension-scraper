@@ -149,3 +149,5 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
 
 .footer { font-size: 13px; color: var(--muted); }
 .footer p { margin: 0 0 8px; }
+.crumb { margin: 0 0 6px; font-size: 14px; }
+.crumb a { color: var(--accent); text-decoration: none; }

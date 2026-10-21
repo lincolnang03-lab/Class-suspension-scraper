@@ -10,3 +10,4 @@ __pycache__/
 .DS_Store
 # The site reads live data from this repo; a data.json next to the page is only for local testing
 trial_dashboard/data.json
+history_ledes.json
