@@ -18,19 +18,30 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
+    env:
+      HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+      HAS_VERCEL: ${{ secrets.VERCEL_TOKEN != '' }}
     steps:
+      - name: Not set up yet
+        if: env.HAS_KEY != 'true'
+        run: echo "::notice::Add the ANTHROPIC_API_KEY repository secret to start checking the news."
       - uses: actions/checkout@v4
+        if: env.HAS_KEY == 'true'
       - uses: actions/setup-python@v5
+        if: env.HAS_KEY == 'true'
         with:
           python-version: "3.11"
           cache: pip
-      - run: pip install -r requirements.txt
+      - if: env.HAS_KEY == 'true'
+        run: pip install -r requirements.txt
       - name: Check the news
+        if: env.HAS_KEY == 'true'
         run: python live.py run
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       - name: Save the results
+        if: env.HAS_KEY == 'true'
         run: |
           git config user.name "walang-pasok-checker"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -39,3 +50,15 @@ jobs:
           git commit -m "Live check $(date -u +%Y-%m-%dT%H:%MZ)"
           git pull --rebase --quiet
           git push
+      # The repo is private, so the site can't read live/ from here: publish it with the page instead
+      - name: Update the site
+        if: env.HAS_KEY == 'true' && env.HAS_VERCEL == 'true'
+        working-directory: trial_dashboard
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: team_1Ox40oesZMep2o6pkth2KJw2
+          VERCEL_PROJECT_ID: prj_FQNAnyeEwbHUrp0eFNvR668jsp3q
+        run: |
+          cp ../live/data.json data.json
+          npx --yes vercel@65.0.0 deploy --prod --yes --token "$VERCEL_TOKEN" > /dev/null
+          echo "Site updated"

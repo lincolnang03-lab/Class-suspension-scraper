@@ -17,7 +17,8 @@ a GitHub Action runs `python live.py run`, which:
 5. Combines everything into `live/data.json`: one record per place and date, with how sure we
    are (how many and which outlets reported it), and commits it back here.
 
-The page (`trial_dashboard/`) reads `live/data.json` from this repo and `places.json` (every
+The site (`trial_dashboard/`) is an executive dashboard of past suspensions (`history.json`) plus the
+upcoming ones, and a city/town lookup (`check.html`). Each check republishes it with `live/data.json`; the lookup uses `places.json` (every
 city and town, from PSGC) to match a parent's town against city, province-wide, region-wide
 and nationwide suspensions. Independent cities aren't covered by their province's suspension,
 except in Metro Manila.
@@ -32,7 +33,16 @@ normal day, under $1 on a heavy typhoon day. `live/spend.json` keeps a running t
 
 ## Setup
 
-- Repository secret `ANTHROPIC_API_KEY` (Settings → Secrets and variables → Actions).
+Repository secrets (Settings → Secrets and variables → Actions):
+
+- `ANTHROPIC_API_KEY` — the checker does nothing until this is set.
+- `VERCEL_TOKEN` — lets each check republish the site with the new results (the repo is private,
+  so the page can't read `live/` from GitHub directly). Create one at vercel.com/account/tokens.
+
+Other commands:
+
 - `python live.py places` rebuilds the town list (rarely needed).
+- `python rappler_history.py START END OUT.json` + `python build_history.py` refresh the past data
+  for the dashboard (free; no AI).
 - `trial_pipeline.py` and `accuracy_check.py` are the month-by-month tools used to test
   accuracy against past data.
