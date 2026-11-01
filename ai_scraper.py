@@ -27,7 +27,6 @@ NEWS_DOMAINS = [   # sources.py's outlets, in priority order; rappler.com is lef
     "pna.gov.ph",
     "deped.gov.ph",
     "gmanetwork.com",
-    "abs-cbn.com",
     "inquirer.net",
 ]
 

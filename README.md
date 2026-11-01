@@ -13,8 +13,10 @@ In this order of priority:
 | DepEd | Its feed (and attached advisory PDFs); articles read by AI |
 | Rappler | Its daily #WalangPasok roundup, parsed **without AI**: Rappler's robots.txt opts out of AI tools |
 | GMA | Its news feeds; articles read by AI |
-| ABS-CBN | **Not read yet**: its site only answers web browsers, and the checker doesn't pretend to be one |
 | Inquirer | **Not read yet**: its article pages are behind bot protection; the feed has headlines only |
+
+ABS-CBN was dropped: its whole site refuses anything that isn't a web browser, and the checker
+doesn't pretend to be one.
 
 The checker identifies itself honestly when it fetches pages (`web.UA`). See `sources.py`.
 

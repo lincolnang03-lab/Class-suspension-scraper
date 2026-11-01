@@ -1,7 +1,7 @@
 """
 Where suspension news comes from: major outlets only, in this order of priority.
 
-    PNA, DepEd, Rappler, GMA, ABS-CBN, Inquirer
+    PNA, DepEd, Rappler, GMA, Inquirer
 
 How each one is read:
 - PNA, DepEd, GMA: their own news pages / feeds list recent articles; each article's text is read
@@ -9,9 +9,9 @@ How each one is read:
 - Rappler: its daily #WalangPasok roundup, parsed by rappler_history.py with no AI. Rappler's
   robots.txt opts out of AI tools (anthropic-ai, ClaudeBot, ChatGPT-User and others), so its
   articles are never sent to Claude.
-- ABS-CBN and Inquirer: not read for now (see BLOCKED). We say who we are when we fetch (web.UA);
-  ABS-CBN refuses anything that isn't a browser, and Inquirer's article pages sit behind bot
-  protection. We don't disguise the checker to get past either.
+- Inquirer: not read for now (see BLOCKED). We say who we are when we fetch (web.UA), and
+  Inquirer's article pages sit behind bot protection; we don't disguise the checker to get past it.
+- ABS-CBN was dropped: its whole site refuses anything that isn't a web browser.
 
     python sources.py      # list what each outlet has right now (free)
 """
@@ -27,11 +27,10 @@ from bs4 import BeautifulSoup
 
 from web import get, html_to_text, log
 
-OUTLETS = ["PNA", "DepEd", "Rappler", "GMA", "ABS-CBN", "Inquirer"]
+OUTLETS = ["PNA", "DepEd", "Rappler", "GMA", "Inquirer"]
 OFFICIAL = {"PNA", "DepEd"}            # the government's own news agency and the education department
 AI_READ = ["PNA", "DepEd", "GMA"]      # outlets whose articles Claude reads
 BLOCKED = {
-    "ABS-CBN": "Its site only answers web browsers, and we don't disguise the checker as one.",
     "Inquirer": "Its article pages are behind bot protection; its feed has headlines but no text.",
 }
 
