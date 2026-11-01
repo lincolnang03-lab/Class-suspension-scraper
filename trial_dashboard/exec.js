@@ -411,6 +411,56 @@
         el("p", { class: "n", text: rs.length ? plural(rs.length, "place") : "None announced" }),
         el("p", { class: "where", text: rs.length ? `${areas.slice(0, 6).join(", ")}${areas.length > 6 ? ` and ${areas.length - 6} more` : ""}` : "No suspension in the news so far." }));
     }));
+    renderBreakdown((LIVE.records || []).filter((r) => (ACTIVE.has(r.status) || r.status === "lifted") && r.date >= today));
+  }
+
+  // Day cards: each day, then province, then every city or town with what was suspended and the source
+  const STATUS_PREFIX = { online_or_modular: "Moved online / modular: ", opening_postponed: "School opening postponed: ", lifted: "Suspension lifted: " };
+  function placeLabel(r) {
+    if (r.scope === "national") return "Nationwide";
+    if (r.scope === "region") return `All of ${r.region}`;
+    if (r.scope === "province") return `All of ${r.province}`;
+    if (r.scope === "schools" || !r.city) return `Some schools in ${r.province}`;
+    return r.city;
+  }
+  function groupOf(r) {
+    if (r.scope === "national") return ["Nationwide", ""];
+    if (r.scope === "region") return [r.region, "whole region"];
+    return [r.province || "Province not stated", r.region || ""];
+  }
+  function renderBreakdown(recs) {
+    const days = unique(recs.map((r) => r.date)).sort();
+    $("#now-breakdown").replaceChildren(...days.map((d) => {
+      const dayRecs = recs.filter((r) => r.date === d);
+      const groups = new Map();
+      dayRecs.forEach((r) => { const [g] = groupOf(r); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(r); });
+      const order = [...groups.keys()].sort((a, b) => (a === "Nationwide" ? -1 : b === "Nationwide" ? 1 : 0)
+        || (regionRank(groups.get(a)[0].region) - regionRank(groups.get(b)[0].region)) || a.localeCompare(b));
+      const rank = (r) => ({ national: 0, region: 1, province: 2, city: 3, schools: 4 }[r.scope] ?? 5);
+      return el("section", { class: "date-card" },
+        el("h3", { class: "date-head" }, dayLabel(d, { weekday: "long", month: "long", day: "numeric" }),
+          el("small", { text: plural(dayRecs.length, "place") })),
+        ...order.map((g) => {
+          const list = groups.get(g).sort((a, b) => rank(a) - rank(b) || placeLabel(a).localeCompare(placeLabel(b)));
+          const sub = groupOf(list[0])[1];
+          return el("div", { class: "province" },
+            el("h4", {}, g, sub ? el("span", { text: ` · ${sub}` }) : null),
+            ...list.map(placeRow));
+        }));
+    }));
+  }
+  function placeRow(r) {
+    const outlets = [...new Map(r.sources.map((s) => [s.outlet, s.url])).entries()];
+    const src = el("span", { class: "src" }, "Source: ");
+    outlets.forEach(([outlet, url], i) => {
+      if (i) src.append(" · ");
+      src.append(el("a", { href: url, target: "_blank", rel: "noopener", text: outlet }));
+    });
+    const wide = r.scope === "province" || r.scope === "region" || r.scope === "national";
+    return el("div", { class: `place${r.status === "lifted" ? " is-lifted" : ""}` },
+      el("div", { class: "name" }, placeLabel(r),
+        wide ? el("span", { class: "tag", text: r.scope === "province" && r.province !== "Metro Manila" ? "entire province" : "entire region" }) : null),
+      el("div", { class: "info" }, `${STATUS_PREFIX[r.status] || ""}${r.suspension_info || "classes suspended"}`, src));
   }
 
   // ── Check now: start a news check and wait for it ─────────────────────────
