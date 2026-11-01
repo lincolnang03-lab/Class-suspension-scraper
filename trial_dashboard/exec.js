@@ -393,9 +393,9 @@
     }
     const today = phToday();
     const age = Date.now() - new Date(LIVE.checked_at).getTime();
-    $("#now-checked").textContent = `From the news, checked ${timeText(LIVE.checked_at)}. Updates every 30 minutes in the evening and early morning.`;
+    $("#now-checked").textContent = `From the news, checked ${timeText(LIVE.checked_at)}. Checked every day at 5 AM; press Check now for the latest.`;
     const issues = [];
-    if (age > 2 * 3600 * 1000) issues.push(`The checker hasn't run since ${timeText(LIVE.checked_at)}, so newer announcements may be missing.`);
+    if (age > 26 * 3600 * 1000) issues.push(`The checker hasn't run since ${timeText(LIVE.checked_at)}, so newer announcements may be missing.`);
     if ((LIVE.problems || []).some((p) => p.startsWith("AI couldn't read"))) issues.push("Some new articles haven't been read yet.");
     $("#now-banner").hidden = !issues.length;
     $("#now-banner").textContent = issues.join(" ");
@@ -412,6 +412,40 @@
         el("p", { class: "where", text: rs.length ? `${areas.slice(0, 6).join(", ")}${areas.length > 6 ? ` and ${areas.length - 6} more` : ""}` : "No suspension in the news so far." }));
     }));
   }
+
+  // ── Check now: start a news check and wait for it ─────────────────────────
+  const checkBtn = $("#check-now");
+  const checkStatus = (text, busy) => {
+    $("#check-status").hidden = !text;
+    $("#check-status").textContent = text || "";
+    checkBtn.disabled = Boolean(busy);
+    checkBtn.textContent = busy ? "Checking…" : "Check now";
+  };
+  const callRefresh = (method) => fetch("api/refresh", { method, cache: "no-store" })
+    .then((r) => r.json().catch(() => ({ state: "error", message: `The check service answered ${r.status}.` })));
+
+  function waitForCheck() {
+    checkStatus("Checking the news now. This takes about 3 to 5 minutes; you can keep reading.", true);
+    const timer = setInterval(() => {
+      callRefresh("GET").then((s) => {
+        if (s.state === "running") return;
+        clearInterval(timer);
+        loadLive().then((l) => { LIVE = l; renderNow(); }).catch(() => {});
+        checkStatus(s.last_ok === false ? "The check didn't finish properly. The results shown are from the last good check."
+          : "Done: showing the latest results.", false);
+      }).catch(() => {});
+    }, 20000);
+  }
+
+  checkBtn.addEventListener("click", () => {
+    checkStatus("Starting a check…", true);
+    callRefresh("POST").then((s) => {
+      if (s.state === "started" || s.state === "running") waitForCheck();
+      else checkStatus(s.message || "Couldn't start a check.", false);
+    }).catch(() => checkStatus("Couldn't reach the check service. Try again in a minute.", false));
+  });
+  // A check someone else started is still running: show it and wait for it
+  callRefresh("GET").then((s) => { if (s.state === "running") waitForCheck(); }).catch(() => {});
 
   // ── CSV ───────────────────────────────────────────────────────────────────
   function downloadCsv(name, rows) {

@@ -1,33 +1,29 @@
 """
-Trial pipeline: pool -> AI scan -> verified raw data, one month at a time.
+Trial pipeline: pool -> AI read -> verified raw data, one month at a time. Used to test accuracy
+against past data, and to rebuild past months from the major outlets (sources.py).
 
-    python trial_pipeline.py catalog 2024-09   # list every article each outlet published (free)
-    python trial_pipeline.py pool 2024-09      # keyword filter + download article text and edit times (free)
-    python trial_pipeline.py times 2024-09     # (re)fetch publish / last-edit times for pooled articles (free)
-    python trial_pipeline.py scan 2024-09      # Claude reads each pooled article (paid)
-    python trial_pipeline.py round2 2024-09    # pull extra articles using keywords the AI found, scan them (paid)
-    python trial_pipeline.py merge 2024-09     # verify quotes, merge by date/place, compare with Rappler (free)
-    python trial_pipeline.py all 2024-09       # every step above, in order (skips steps already done)
+    python trial_pipeline.py catalog 2025-09   # list what each outlet published that month (free)
+    python trial_pipeline.py pool 2025-09      # keyword filter + download article text and dates (free)
+    python trial_pipeline.py scan 2025-09      # Claude reads each pooled article: Haiku reads, Sonnet structures (paid)
+    python trial_pipeline.py round2 2025-09    # pull extra articles using keywords the AI found, read them (paid)
+    python trial_pipeline.py merge 2025-09     # verify quotes, merge by date/place, compare with Rappler (free)
+    python trial_pipeline.py all 2025-09       # every step above, in order (skips steps already done)
     python trial_pipeline.py dashboard         # combine every merged month into trial_dashboard/data.json
 
-The month defaults to 2024-07 (the first trial) when left out.
-
-Everything is saved under trial/<month>/ so each step can be re-run or inspected.
+Listing a past month works only where an outlet keeps a dated archive we can read (see
+sources.DAY_LISTERS); the others are reported as skipped. Every AI call is added to costs/.
+Everything else is saved under trial/<month>/ so each step can be re-run or inspected.
 """
 
 import concurrent.futures as cf
 import copy
-import html
 import json
 import re
 import sys
-import time
 import unicodedata
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-import requests
-from bs4 import BeautifulSoup
 
 # ── Trial settings ───────────────────────────────────────────────────────────
 ROOT = Path(__file__).parent
@@ -47,13 +43,6 @@ def set_month(ym: str):
 
 set_month("2024-07")
 
-MODEL = "claude-opus-5-5"
-FALLBACK_BETA = "server-side-fallback-2026-07-01"
-PRICE_IN, PRICE_OUT = 4.00, 20.00  # USD per million tokens (Opus 5.5)
-
-UA = {"User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-                     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")}
-
 # Round-1 pool filter, matched against title + URL. Generous on purpose:
 # the AI throws out what isn't about class suspensions.
 POOL_PATTERNS = [
@@ -62,51 +51,10 @@ POOL_PATTERNS = [
     r"online[\s-]+class", r"modular", r"kanselado", r"school",
 ]
 
-REGIONS = [
-    "NCR", "CAR", "Ilocos Region", "Cagayan Valley", "Central Luzon", "CALABARZON",
-    "MIMAROPA", "Bicol Region", "Western Visayas", "Central Visayas",
-    "Negros Island Region", "Eastern Visayas", "Zamboanga Peninsula",
-    "Northern Mindanao", "Davao Region", "SOCCSKSARGEN", "Caraga", "BARMM",
-]
-
-
-def log(*a):
-    print(*a, flush=True)
-
-
-def get(url, **kw):
-    for attempt in range(3):
-        try:
-            r = requests.get(url, headers=UA, timeout=40, **kw)
-            if r.status_code in (429, 502, 503, 504):
-                time.sleep(3 * (attempt + 1))
-                continue
-            if not r.encoding or r.encoding.lower() == "iso-8859-1":
-                r.encoding = "utf-8"  # pages without a declared charset are UTF-8 here
-            if r.content[:3] == b"\xef\xbb\xbf":
-                r.encoding = "utf-8-sig"  # some feeds start with a byte-order mark, which json can't read
-            return r
-        except requests.RequestException:
-            time.sleep(3 * (attempt + 1))
-    return None
-
-
-def html_to_text(fragment: str) -> str:
-    """Article HTML -> plain text that keeps one line per paragraph / list item."""
-    soup = BeautifulSoup(fragment or "", "html.parser")
-    for t in soup(["script", "style", "figure", "iframe"]):
-        t.decompose()
-    lines = []
-    for el in soup.find_all(["p", "li", "h1", "h2", "h3", "h4", "h5", "h6", "td"]):
-        if el.find(["p", "li"]):  # skip wrappers; their children are listed themselves
-            continue
-        t = el.get_text(" ", strip=True)
-        if t:
-            prefix = "- " if el.name == "li" else ("## " if el.name.startswith("h") else "")
-            lines.append(prefix + t)
-    if not lines:
-        lines = [soup.get_text("\n", strip=True)]
-    return "\n".join(lines)
+import costs
+import sources
+from reader import make_client, read_article as scan_one
+from web import log, read_jsonl, write_jsonl
 
 
 def daterange(a: date, b: date):
@@ -115,71 +63,16 @@ def daterange(a: date, b: date):
         a += timedelta(days=1)
 
 
-def read_jsonl(path: Path) -> list:
-    if not path.exists():
-        return []
-    return [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
-
-
-def write_jsonl(path: Path, rows: list):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
-
-
-# ── 1. Catalog: every article each outlet published ─────────────────────────
-
-def catalog_wordpress(outlet: str, base: str, d: date) -> list:
-    """One day of posts from a WordPress site's public posts feed."""
-    rows, page = [], 1
-    while True:
-        r = get(f"{base}/wp-json/wp/v2/posts", params={
-            "after": f"{d}T00:00:00", "before": f"{d + timedelta(days=1)}T00:00:00",
-            "per_page": 100, "page": page, "_fields": "id,date,link,title",
-        })
-        if r is None or r.status_code != 200:
-            break
-        batch = r.json()
-        rows += [{"outlet": outlet, "id": p["id"], "url": p["link"], "published": p["date"],
-                  "title": html.unescape(re.sub(r"<[^>]+>", "", p["title"]["rendered"]))}
-                 for p in batch]
-        if page >= int(r.headers.get("X-WP-TotalPages", 1)):
-            break
-        page += 1
-    return rows
-
-
-def catalog_sunstar(d: date) -> list:
-    """SunStar publishes one sitemap per day; titles come from the URL slug."""
-    r = get(f"https://www.sunstar.com.ph/sitemap/sitemap-daily-{d}.xml")
-    if r is None or r.status_code != 200:
-        return []
-    rows = []
-    for block in re.findall(r"<url>(.*?)</url>", r.text, flags=re.S):
-        loc = re.search(r"<loc>\s*(.*?)\s*</loc>", block)
-        lm = re.search(r"<lastmod>\s*(.*?)\s*</lastmod>", block)
-        if not loc:
-            continue
-        slug = loc.group(1).rstrip("/").rsplit("/", 1)[-1]
-        rows.append({"outlet": "SunStar", "id": loc.group(1), "url": loc.group(1),
-                     "published": lm.group(1)[:19] if lm else f"{d}T00:00:00",
-                     "title": slug.replace("-", " ")})
-    return rows
-
-
-OUTLETS = {
-    "Rappler": lambda d: catalog_wordpress("Rappler", "https://www.rappler.com", d),
-    "Bombo Radyo": lambda d: catalog_wordpress("Bombo Radyo", "https://www.bomboradyo.com", d),
-    "SunStar": catalog_sunstar,
-}
-
+# ── 1. Catalog: what each outlet published ──────────────────────────────────
 
 def cmd_catalog():
     days = list(daterange(CATALOG_START, MONTH_END))
-    jobs = [(name, d) for name in OUTLETS for d in days]
     rows = []
-    with cf.ThreadPoolExecutor(6) as ex:
-        for got in ex.map(lambda j: OUTLETS[j[0]](j[1]), jobs):
-            rows += got
+    for outlet in sources.AI_READ:
+        if outlet not in sources.DAY_LISTERS:
+            log(f"  {outlet}: no dated archive we can read yet - skipped for past months")
+            continue
+        rows += sources.DAY_LISTERS[outlet](days)
     seen, uniq = set(), []
     for r in rows:
         if r["url"] not in seen:
@@ -187,7 +80,7 @@ def cmd_catalog():
             uniq.append(r)
     uniq.sort(key=lambda r: (r["published"], r["outlet"]))
     write_jsonl(OUT / "catalog.jsonl", uniq)
-    by = {o: sum(1 for r in uniq if r["outlet"] == o) for o in OUTLETS}
+    by = {o: sum(1 for r in uniq if r["outlet"] == o) for o in sources.AI_READ}
     log(f"Catalog: {len(uniq)} articles {by} -> {OUT / 'catalog.jsonl'}")
 
 
@@ -198,58 +91,10 @@ def matches(text: str, patterns) -> list:
     return [p for p in patterns if re.search(p, t)]
 
 
-def fetch_text(item: dict) -> str:
-    if item["outlet"] in ("Rappler", "Bombo Radyo"):
-        base = "https://www.rappler.com" if item["outlet"] == "Rappler" else "https://www.bomboradyo.com"
-        r = get(f"{base}/wp-json/wp/v2/posts/{item['id']}", params={"_fields": "content"})
-        if r is not None and r.status_code == 200:
-            return html_to_text(r.json()["content"]["rendered"])
-    r = get(item["url"])
-    if r is None or r.status_code != 200:
-        return ""
-    soup = BeautifulSoup(r.text, "html.parser")
-    if item["outlet"] == "SunStar":
-        h1 = soup.find("h1")
-        if h1:
-            item["title"] = h1.get_text(" ", strip=True)
-        parts = soup.select("[data-test-id=text]")
-        return "\n".join(html_to_text(str(p)) for p in parts)
-    return html_to_text(str(soup.find("article") or soup.body or soup))
-
-
 def add_text(items: list) -> list:
-    def work(it):
-        it["text"] = fetch_text(it)
-        return it
+    """Article text, title and publish / last-edit dates for each item (sources.fetch)."""
     with cf.ThreadPoolExecutor(6) as ex:
-        return list(ex.map(work, items))
-
-
-def add_times(items: list) -> list:
-    """Publish and last-edit times (UTC) per article, used to tell updates from disagreements."""
-    wp = {"Rappler": "https://www.rappler.com", "Bombo Radyo": "https://www.bomboradyo.com"}
-    for outlet, base in wp.items():
-        mine = [it for it in items if it["outlet"] == outlet]
-        for i in range(0, len(mine), 100):
-            chunk = mine[i:i + 100]
-            r = get(f"{base}/wp-json/wp/v2/posts", params={
-                "include": ",".join(str(it["id"]) for it in chunk), "per_page": 100,
-                "_fields": "id,date_gmt,modified_gmt"})
-            got = {p["id"]: p for p in r.json()} if r is not None and r.status_code == 200 else {}
-            for it in chunk:
-                if it["id"] in got:
-                    it["published_utc"] = got[it["id"]]["date_gmt"]
-                    it["modified_utc"] = got[it["id"]]["modified_gmt"]
-    for it in items:
-        if it["outlet"] == "SunStar":  # SunStar's daily sitemap lastmod is the last change, in UTC
-            it.setdefault("modified_utc", it["published"][:19])
-    return items
-
-
-def cmd_times():
-    pool = add_times(read_jsonl(OUT / "pool.jsonl"))
-    write_jsonl(OUT / "pool.jsonl", pool)
-    log(f"Edit times found for {sum(1 for p in pool if p.get('modified_utc'))} of {len(pool)} pooled articles")
+        return list(ex.map(sources.fetch, items))
 
 
 def cmd_pool():
@@ -260,7 +105,7 @@ def cmd_pool():
         if hits:
             pool.append({**it, "round": 1, "matched": hits})
     log(f"Pool: {len(pool)} of {len(catalog)} catalog articles matched the keywords; downloading text...")
-    pool = add_times(add_text(pool))
+    pool = add_text(pool)
     empty = sum(1 for p in pool if not p["text"])
     write_jsonl(OUT / "pool.jsonl", pool)
     log(f"Saved {len(pool)} articles ({empty} with no text) -> {OUT / 'pool.jsonl'}")
@@ -268,141 +113,12 @@ def cmd_pool():
 
 # ── 3. Scan: Claude reads each article ───────────────────────────────────────
 
-def _nullable(s):
-    return {"anyOf": [s, {"type": "null"}]}
-
-
-SCAN_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "about_class_suspensions": {"type": "boolean"},
-        "suspensions": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "place_as_written": {"type": "string"},
-                    "island": _nullable({"type": "string", "enum": ["Luzon", "Visayas", "Mindanao"]}),
-                    "region": _nullable({"type": "string", "enum": REGIONS}),
-                    "province": _nullable({"type": "string"}),
-                    "city": _nullable({"type": "string"}),
-                    "dates": {"type": "array", "items": {"type": "string", "format": "date"}},
-                    "levels": {"type": "string"},
-                    "status": {"type": "string", "enum": ["suspended", "lifted", "online_or_modular", "other"]},
-                    "evidence_quote": {"type": "string"},
-                },
-                "required": ["place_as_written", "island", "region", "province", "city",
-                             "dates", "levels", "status", "evidence_quote"],
-                "additionalProperties": False,
-            },
-        },
-        "keywords": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "keyword": {"type": "string"},
-                    "kind": {"type": "string", "enum": ["event", "phrase"]},
-                },
-                "required": ["keyword", "kind"],
-                "additionalProperties": False,
-            },
-        },
-        "cited_sources": {"type": "array", "items": {"type": "string"}},
-    },
-    "required": ["about_class_suspensions", "suspensions", "keywords", "cited_sources"],
-    "additionalProperties": False,
-}
-
-SCAN_SYSTEM = """\
-You read one Philippine news article and extract class suspensions ("walang pasok") from it.
-
-Return about_class_suspensions = false (and empty lists) if the article does not announce or
-report class suspensions for specific places. Articles about school openings, enrollment,
-suspended officials, suspended operations of businesses, etc. are NOT about class suspensions.
-
-For each place whose classes were suspended (or whose suspension was lifted, or whose classes
-were moved online / modular), add one entry:
-- place_as_written: the place exactly as the article names it.
-- island / region / province / city: where it is. Metro Manila is region "NCR", province
-  "Metro Manila". Negros Occidental/Oriental and Siquijor are "Negros Island Region".
-  Use city "all cities" when a whole province suspended classes, and city null when the
-  article names only a region or school.
-  Use official names ("Quezon City", "City of Manila", "Malolos City").
-- dates: the calendar date(s) the suspension applies to, as YYYY-MM-DD. Work out words like
-  "tomorrow", "Wednesday" or "until further notice" from the article's publish date. For
-  "until further notice", list only the dates the article itself covers.
-- levels: the levels and details as written, e.g. "all levels (public and private)",
-  "preschool to senior high school (public)".
-- status: suspended, lifted, online_or_modular, or other.
-- evidence_quote: copy the exact sentence or list line from the article that supports this
-  entry, character for character. One line is enough. Never paraphrase.
-
-Only include places named in the article text. Do not add places from your own knowledge.
-
-keywords: names that would help find more articles about these suspensions: storm or event
-names (kind "event", e.g. "Carina", "habagat") and Filipino/English phrasings for class
-suspensions you saw that are not obvious (kind "phrase", e.g. "suspendido ang klase").
-cited_sources: who the article says announced the suspensions (e.g. "Malolos City PIO",
-"DepEd Region 3").
-"""
-
-
-def scan_one(client, item: dict) -> dict:
-    content = (f"Outlet: {item['outlet']}\nPublished: {item['published']}\nTitle: {item['title']}\n"
-               f"URL: {item['url']}\n\n<article>\n{item['text'][:60000]}\n</article>")
-    with client.beta.messages.stream(
-        model=MODEL,
-        max_tokens=32000,
-        betas=[FALLBACK_BETA],
-        fallbacks="default",
-        output_config={"effort": "medium", "format": {"type": "json_schema", "schema": SCAN_SCHEMA}},
-        system=SCAN_SYSTEM,
-        messages=[{"role": "user", "content": content}],
-    ) as stream:
-        resp = stream.get_final_message()
-    usage = {"input_tokens": resp.usage.input_tokens, "output_tokens": resp.usage.output_tokens}
-    if resp.stop_reason in ("refusal", "max_tokens"):
-        return {"url": item["url"], "error": resp.stop_reason, "usage": usage}
-    text = next(b.text for b in resp.content if b.type == "text")
-    return {"url": item["url"], "result": json.loads(text), "usage": usage}
-
-
-def load_api_key():
-    """
-    Find the API key: ANTHROPIC_API_KEY in the environment, else a line
-    ANTHROPIC_API_KEY=... in .env in this folder, else the file ~/.anthropic_key.
-    """
-    import os
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        return None
-    env_file = ROOT / ".env"
-    if env_file.exists():
-        for line in env_file.read_text(encoding="utf-8").splitlines():
-            name, _, value = line.partition("=")
-            if name.strip() == "ANTHROPIC_API_KEY" and value.strip():
-                return value.strip().strip("\"'")
-    key_file = Path.home() / ".anthropic_key"
-    if key_file.exists():
-        return key_file.read_text().strip()
-    sys.exit("No API key: add ANTHROPIC_API_KEY=... to .env in this folder")
-
-
-def make_client():
-    import anthropic
-    key = load_api_key()
-    # Ask for gzip: the brotli package installed here (1.0.9) is too old for the HTTP library,
-    # and a brotli-compressed reply fails to decode with "process() takes no keyword arguments".
-    return anthropic.Anthropic(max_retries=4, default_headers={"Accept-Encoding": "gzip, deflate"},
-                               **({"api_key": key} if key else {}))
-
-
 def run_scan(items: list) -> list:
     client = make_client()
     results_path = OUT / "scan.jsonl"
     done = {r["url"] for r in read_jsonl(results_path) if "result" in r}
     todo = [it for it in items if it["url"] not in done and it.get("text")]
-    log(f"Scanning {len(todo)} articles ({len(done)} already done)...")
+    log(f"Reading {len(todo)} articles ({len(done)} already done)...")
     out = read_jsonl(results_path)
     out = [r for r in out if "result" in r]
 
@@ -416,6 +132,7 @@ def run_scan(items: list) -> list:
         for i, res in enumerate(ex.map(work, todo), 1):
             out.append(res)
             write_jsonl(results_path, out)
+            costs.record(f"trial {MONTH_START:%Y-%m}", res.get("usage") or [])
             if i % 10 == 0 or i == len(todo):
                 log(f"  {i}/{len(todo)}")
     errors = [r for r in out if "error" in r]
@@ -468,7 +185,7 @@ def cmd_round2(max_new: int = 80):
             break
     log(f"Round 2: {len(kw_dates)} new keywords {sorted(kw_dates)[:15]} -> {len(new)} new articles"
         + (f", reading the first {max_new}" if len(new) > max_new else ""))
-    new = add_times(add_text(new[:max_new]))
+    new = add_text(new[:max_new])
     write_jsonl(OUT / "pool.jsonl", pool + new)
     (OUT / "round2_keywords.json").write_text(json.dumps(
         {k: {"kind": v["kind"], "dates": sorted(v["dates"])} for k, v in kw_dates.items()},
@@ -584,22 +301,25 @@ def normalize_levels(text: str, status: str) -> dict:
 
 # ── Confidence (1-5) from who reported it ────────────────────────────────────
 
-MAJOR_OUTLETS = {"Rappler", "GMA", "ABS-CBN", "Inquirer", "Philstar", "Manila Bulletin", "PNA", "PIA", "DepEd"}
+MAJOR_OUTLETS = set(sources.OUTLETS)   # every source is a major outlet now
+OFFICIAL = sources.OFFICIAL            # PNA and DepEd
 
 
 def confidence(outlets: set, verification: str, resolution: str, details_missing: list) -> tuple:
-    major = len(outlets & MAJOR_OUTLETS)
-    support = len(outlets - MAJOR_OUTLETS)
-    if major >= 2:
-        score, why = 5, f"{major} major outlets"
-    elif major == 1 and support:
-        score, why = 4, "1 major + supporting outlet"
-    elif major == 1:
-        score, why = 3, "1 major outlet"
-    elif support >= 2:
-        score, why = 2, f"{support} supporting outlets"
+    """
+    5 = three or more outlets, or an official source (PNA, DepEd) plus another outlet
+    4 = two outlets, or an official source on its own
+    3 = one outlet
+    One point less for each: the quote wasn't found word for word, the outlets disagree, levels or
+    public/private not stated. Never below 1.
+    """
+    n, official = len(outlets), bool(outlets & OFFICIAL)
+    if n >= 3 or (official and n >= 2):
+        score, why = 5, f"{n} outlets" + (" incl. " + ", ".join(sorted(outlets & OFFICIAL)) if official else "")
+    elif n == 2 or official:
+        score, why = 4, f"{n} outlets" if n == 2 else f"{', '.join(outlets)} (official)"
     else:
-        score, why = 1, "1 supporting outlet"
+        score, why = 3, f"1 outlet ({next(iter(outlets), '?')})"
     if verification != "quote":
         score, why = max(1, score - 1), why + "; proof not found word for word"
     if resolution == "disagree":
@@ -722,7 +442,7 @@ REGION_WORDS = re.compile(r"region|rehiyon|\bncr\b|metro manila|calabarzon|mimar
 def build_records(pool: dict, scans: list, dates: set):
     """
     Turn AI reads into one record per place and date (only dates in `dates`).
-    Returns (records, unplaced, articles, cost). Shared by the monthly trial and the live checker.
+    Returns (records, unplaced, articles, cost_usd). Shared by the monthly trial and the live checker.
 
     A record's scope is "city", "schools" (some schools in a province, city null), "province"
     (city "all cities"), "region" (province null) or "national" (region and province null), so a
@@ -732,12 +452,10 @@ def build_records(pool: dict, scans: list, dates: set):
     merged = {}       # (date, province_key, city_key) -> record
     unplaced = []     # entries that name no place we can use (e.g. "738 schools nationwide")
     articles = []     # per-article summary
-    cost = {"input_tokens": 0, "output_tokens": 0}
+    cost = 0.0
     for s in scans:
         item = pool.get(s["url"], {})
-        u = s.get("usage") or {}
-        cost["input_tokens"] += u.get("input_tokens", 0)
-        cost["output_tokens"] += u.get("output_tokens", 0)
+        cost += costs.total_usd(s.get("usage"))
         res = s.get("result")
         summary = {"url": s["url"], "outlet": item.get("outlet"), "title": item.get("title"),
                    "published": item.get("published"), "round": item.get("round", 1),
@@ -862,7 +580,7 @@ def cmd_merge():
     summary = {
         "month": MONTH_START.strftime("%Y-%m"),
         "generated": datetime.now().isoformat(timespec="seconds"),
-        "outlets": list(OUTLETS),
+        "outlets": sources.AI_READ,
         "funnel": {
             "catalog": len(catalog),
             "pool_round1": sum(1 for p in pool.values() if p.get("round", 1) == 1),
@@ -872,10 +590,9 @@ def cmd_merge():
             "place_days": len(records),
             "verified_quote": sum(1 for r in records if r["verification"] == "quote"),
         },
-        "catalog_by_outlet": {o: sum(1 for c in catalog if c["outlet"] == o) for o in OUTLETS},
+        "catalog_by_outlet": {o: sum(1 for c in catalog if c["outlet"] == o) for o in sources.AI_READ},
         "round2_keywords": json.loads(kw.read_text(encoding="utf-8")) if kw.exists() else {},
-        "cost_usd": round(cost["input_tokens"] * PRICE_IN / 1e6 + cost["output_tokens"] * PRICE_OUT / 1e6, 2),
-        "tokens": cost,
+        "cost_usd": round(cost, 2),
         "rappler_place_days": len(rappler_recs),
         "rappler_days": sorted({d for d, _ in rappler_recs}),
         "unplaced": len(unplaced),
@@ -931,7 +648,7 @@ def cmd_all():
 
 
 if __name__ == "__main__":
-    cmds = {"catalog": cmd_catalog, "pool": cmd_pool, "times": cmd_times, "scan": cmd_scan,
+    cmds = {"catalog": cmd_catalog, "pool": cmd_pool, "scan": cmd_scan,
             "round2": cmd_round2, "merge": cmd_merge, "all": cmd_all, "dashboard": cmd_dashboard}
     if len(sys.argv) not in (2, 3) or sys.argv[1] not in cmds:
         print(__doc__)

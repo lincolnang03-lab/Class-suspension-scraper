@@ -13,7 +13,7 @@
   };
   const SCOPE_RANK = { city: 0, province: 1, region: 2, national: 3 };
   const REFRESH_MS = 5 * 60 * 1000;
-  const STALE_MS = 2 * 60 * 60 * 1000;
+  const STALE_MS = 26 * 60 * 60 * 1000;  // checks run daily
 
   const $ = (s) => document.querySelector(s);
   const el = (tag, props = {}, ...kids) => {
@@ -145,7 +145,7 @@
   function renderStatus() {
     if (!DATA) return;
     const age = Date.now() - new Date(DATA.checked_at).getTime();
-    $("#checked").replaceChildren("Last checked ", el("b", { text: whenText(DATA.checked_at) }), ". Refreshes on its own.");
+    $("#checked").replaceChildren("Last checked ", el("b", { text: whenText(DATA.checked_at) }), ". Checked every morning at 5 AM.");
     const issues = [];
     if (age > STALE_MS) issues.push(`The checker hasn't run since ${whenText(DATA.checked_at)}, so newer announcements may be missing.`);
     if ((DATA.problems || []).some((p) => p.startsWith("AI couldn't read"))) issues.push("Some new articles haven't been read yet, so the newest announcements may be missing.");

@@ -14,10 +14,12 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+import reader
 import trial_pipeline as tp
+from web import get, html_to_text, log
 
 ROOT = Path(__file__).parent
-YEARS = [2023, 2024, 2025, 2026]
+YEARS = [2025, 2026]   # the dashboard covers 2025 onward
 LEDE_CACHE = ROOT / "history_ledes.json"
 OUT = ROOT / "trial_dashboard" / "history.json"
 
@@ -38,11 +40,11 @@ STORM = re.compile(r"(?:Super Typhoon|Typhoon|Severe Tropical Storm|Tropical Sto
 def lede_of(url: str) -> dict:
     """The roundup's title and opening paragraph, from Rappler's public posts API."""
     slug = url.rstrip("/").rsplit("/", 1)[-1]
-    r = tp.get("https://www.rappler.com/wp-json/wp/v2/posts", params={"slug": slug, "_fields": "title,content"})
+    r = get("https://www.rappler.com/wp-json/wp/v2/posts", params={"slug": slug, "_fields": "title,content"})
     if r is None or r.status_code != 200 or not r.json():
         return {"title": "", "lede": ""}
     p = r.json()[0]
-    text = tp.html_to_text(p["content"]["rendered"])
+    text = html_to_text(p["content"]["rendered"])
     first = next((line for line in text.splitlines() if len(line) > 60), "")
     first = re.sub(r"^MANILA, Philippines\s*[–—-]\s*", "", first)
     first = re.split(r"(?<=\.)\s+This list will be updated", first)[0]
@@ -55,7 +57,7 @@ def lede_of(url: str) -> dict:
 _P = json.loads((ROOT / "trial_dashboard" / "places.json").read_text(encoding="utf-8"))["places"]
 PROVINCE_REGION = {tp.place_key(p[1]): p[0] for p in _P}
 CITY_PROVINCE = {tp.place_key(p[2]): p[1] for p in _P if p[3]}
-REGIONS = set(tp.REGIONS)
+REGIONS = set(reader.REGIONS)
 PROVINCE_FIX = {"mountain": "Mountain Province"}
 # A "town" that is really part of one: schools, universities, barangays, lists, instructions
 PARTIAL = re.compile(r"school|university|universidad|college|colegio|pamantasan|academy|institute|barangay|"
@@ -116,7 +118,7 @@ def main():
                 continue
             if d not in ledes:
                 ledes[d] = lede_of(v["url"])
-                tp.log(f"{d}: {ledes[d]['lede'][:110]}")
+                log(f"{d}: {ledes[d]['lede'][:110]}")
             cause, storms = cause_of(f"{ledes[d]['title']} {ledes[d]['lede']}")
             days[d] = {"cause": cause, "storms": storms, "reason": ledes[d]["lede"], "url": v["url"]}
             for r in sus:
@@ -147,8 +149,8 @@ def main():
     }
     OUT.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     from collections import Counter
-    tp.log(f"{len(records)} place-days on {len(days)} days -> {OUT} ({OUT.stat().st_size / 1e6:.2f} MB)")
-    tp.log("Days by cause: " + json.dumps(Counter(v["cause"] for v in days.values()), ensure_ascii=False))
+    log(f"{len(records)} place-days on {len(days)} days -> {OUT} ({OUT.stat().st_size / 1e6:.2f} MB)")
+    log("Days by cause: " + json.dumps(Counter(v["cause"] for v in days.values()), ensure_ascii=False))
 
 
 if __name__ == "__main__":

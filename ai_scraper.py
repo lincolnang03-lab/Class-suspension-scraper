@@ -5,9 +5,11 @@ Instead of building one Rappler URL per day, Claude searches Philippine news and
 government sources for a given date, reads whatever announcements it finds, and
 returns records in the same schema as class_suspensions_YYYY.json.
 
-Two API calls per date:
+Two API calls per date, both on Claude Sonnet 5.5:
   1. research  - Claude + web_search/web_fetch, writes plain-text findings with source URLs
   2. structure - Claude turns those findings into JSON records (structured outputs)
+
+Only the major outlets in sources.py are searched, minus Rappler, which opts out of AI tools.
 """
 
 import json
@@ -16,26 +18,17 @@ from datetime import date
 
 import anthropic
 
-MODEL = "claude-opus-5-5"
+MODEL = "claude-sonnet-5-5"
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 # Sources Claude may search and read. Facebook/X posts can't be fetched, so LGU
 # announcements are only picked up once a news outlet or PIA reports them.
-NEWS_DOMAINS = [
-    "rappler.com",
-    "gmanetwork.com",
-    "inquirer.net",
-    "philstar.com",
-    "abs-cbn.com",
-    "news.tv5.com.ph",
-    "mb.com.ph",
-    "manilatimes.net",
+NEWS_DOMAINS = [   # sources.py's outlets, in priority order; rappler.com is left out (it opts out of AI tools)
     "pna.gov.ph",
-    "pia.gov.ph",
     "deped.gov.ph",
-    "sunstar.com.ph",
-    "bomboradyo.com",
-    "brigada.ph",
+    "gmanetwork.com",
+    "abs-cbn.com",
+    "inquirer.net",
 ]
 
 # Region names exactly as they appear in the existing JSON files / map COORDS.
@@ -47,8 +40,8 @@ REGIONS = [
 ]
 ISLANDS = ["Luzon", "Visayas", "Mindanao"]
 
-# Opus 5.5 pricing, USD per million tokens / per search
-PRICE_IN, PRICE_OUT, PRICE_SEARCH = 4.00, 20.00, 0.01
+# Sonnet 5.5 pricing, USD per million tokens / per search
+PRICE_IN, PRICE_OUT, PRICE_SEARCH = 2.00, 10.00, 0.01
 
 
 # ── 1. Research ──────────────────────────────────────────────────────────────

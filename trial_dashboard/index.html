@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Lost School Days</title>
-<meta name="description" content="Class suspensions in the Philippines since 2023: where and why school days are lost, what is coming up, and what the seasons suggest.">
+<meta name="description" content="Class suspensions in the Philippines since 2025: where and why school days are lost, what is coming up, and what the seasons suggest.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -21,17 +21,21 @@
     <div>
       <p class="kicker">Philippines · basic and higher education</p>
       <h1>Lost School Days</h1>
-      <p class="lede" id="lede">Every class suspension announced by a city, town, province or Malacañang since 2023: where school days are lost, why, and what is coming up.</p>
+      <p class="lede" id="lede">Every class suspension announced by a city, town, province or Malacañang since 2025: where school days are lost, why, and what is coming up.</p>
     </div>
     <a class="check-link" href="check.html">Check a city or town →</a>
   </header>
 
   <!-- Upcoming: from the live checker -->
   <section class="card now" aria-labelledby="now-title">
-    <div class="card-head">
-      <h2 id="now-title">Now and next</h2>
-      <p class="muted" id="now-checked">Loading the latest check…</p>
+    <div class="card-head row">
+      <div>
+        <h2 id="now-title">Now and next</h2>
+        <p class="muted" id="now-checked">Loading the latest check…</p>
+      </div>
+      <button type="button" class="btn primary" id="check-now">Check now</button>
     </div>
+    <p class="check-status" id="check-status" aria-live="polite" hidden></p>
     <div class="now-days" id="now-days"></div>
     <p class="banner" id="now-banner" hidden></p>
   </section>
@@ -108,12 +112,12 @@
       </div>
       <div>
         <h3>Limits</h3>
-        <p>These are a <b>lower bound</b>. Rappler compiles roundups on days with widespread suspensions, so single-town suspensions (floods, bomb threats, local heat) are often missing: in a July 2024 test, reading three outlets found about 50% more suspended places than Rappler's lists alone. 2023 has fewer roundups than later years, so year-to-year rises are partly better coverage.</p>
+        <p>These are a <b>lower bound</b>. Rappler compiles roundups on days with widespread suspensions, so single-town suspensions (floods, bomb threats, local heat) are often missing: in a July 2024 test, reading more outlets found about 50% more suspended places than Rappler's lists alone. The past data will be rebuilt from all the major outlets below.</p>
         <p>“Face-to-face only” suspensions moved classes to modular or online learning instead of cancelling them.</p>
       </div>
       <div>
         <h3>Upcoming suspensions</h3>
-        <p>Read from Rappler, Bombo Radyo and SunStar news every 30 minutes in the evening and early morning, by an AI reader that quotes the article for every place it lists. “The season ahead” is the 2023–2025 average for each month, not a forecast.</p>
+        <p>Checked every day at 5 AM, and whenever someone presses <b>Check now</b>, from the major outlets: PNA, DepEd and GMA (read by AI, which quotes the article for every place it lists) and Rappler's daily roundup (read without AI, as Rappler asks). ABS-CBN and Inquirer block automated reading, so they aren't included yet. “The season ahead” is the 2025 average for each month, not a forecast.</p>
         <p id="coverage"></p>
       </div>
     </div>

@@ -2,7 +2,7 @@
 Accuracy check for the trial pipeline, month by month.
 
     python accuracy_check.py coverage 2024-01 2024-02 ...   # what the old data has that the AI missed, and why (free)
-    python accuracy_check.py audit 2024-01 2024-02 ...      # a second AI pass rereads the article behind each claim (paid)
+    python accuracy_check.py audit 2024-01 2024-02 ...      # a second AI pass (Sonnet) rereads the article behind each claim (paid)
     python accuracy_check.py report 2024-01 2024-02 ...     # one summary + a spot-check sheet to check by hand (free)
 
 Two different questions:
@@ -23,6 +23,8 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
+import costs
+import reader
 import trial_pipeline as tp
 
 ROOT = Path(__file__).parent
@@ -142,14 +144,19 @@ def _claim_text(r: dict) -> str:
 def audit_one(client, rec: dict, item: dict) -> dict:
     content = (f"Outlet: {item.get('outlet')}\nPublished: {item.get('published')}\nTitle: {item.get('title')}\n\n"
                f"<article>\n{(item.get('text') or '')[:60000]}\n</article>\n\n<claim>\n{_claim_text(rec)}\n</claim>")
-    resp = client.messages.create(
-        model=tp.MODEL, max_tokens=4000,
+    # Sonnet: the checker is a judgement call on a whole article, not just reading it
+    with client.beta.messages.stream(
+        model=reader.STRUCTURE_MODEL, max_tokens=8000,
+        betas=[reader.FALLBACK_BETA], fallbacks="default",
         output_config={"effort": "low", "format": {"type": "json_schema", "schema": AUDIT_SCHEMA}},
         system=AUDIT_SYSTEM, messages=[{"role": "user", "content": content}],
-    )
+    ) as stream:
+        resp = stream.get_final_message()
+    usage = [costs.usage_of(resp)]
+    if resp.stop_reason in ("refusal", "max_tokens"):
+        raise RuntimeError(f"audit stopped: {resp.stop_reason}")
     text = next(b.text for b in resp.content if b.type == "text")
-    return {"result": json.loads(text),
-            "usage": {"input_tokens": resp.usage.input_tokens, "output_tokens": resp.usage.output_tokens}}
+    return {"result": json.loads(text), "usage": usage}
 
 
 def _rec_id(r: dict) -> str:
@@ -158,7 +165,7 @@ def _rec_id(r: dict) -> str:
 
 def audit(ym: str):
     tp.set_month(ym)
-    client = tp.make_client()
+    client = reader.make_client()
     data = json.loads((tp.OUT / "dashboard_data.json").read_text(encoding="utf-8"))
     pool = {p["url"]: p for p in tp.read_jsonl(tp.OUT / "pool.jsonl")}
     path = tp.OUT / "audit.jsonl"
@@ -174,9 +181,9 @@ def audit(ym: str):
     def work(job):
         rec, group = job
         # Major outlet first, then the rest: the record stands if any one source supports it
-        sources = sorted(rec["sources"], key=lambda s: s["outlet"] not in tp.MAJOR_OUTLETS)
+        srcs = sorted(rec["sources"], key=lambda s: s["outlet"] not in tp.MAJOR_OUTLETS)
         tried = []
-        for src in sources[:2]:
+        for src in srcs[:2]:
             try:
                 got = audit_one(client, rec, pool.get(src["url"], {}))
             except Exception as e:
@@ -189,13 +196,14 @@ def audit(ym: str):
                 "city": rec["city"], "suspension_info": rec["suspension_info"], "status": rec["status"],
                 "confidence": rec["confidence"], "result": best["result"], "checked_url": best["url"],
                 "checked_outlet": best["outlet"],
-                "usage": {k: sum(t["usage"][k] for t in tried) for k in ("input_tokens", "output_tokens")}}
+                "usage": [c for t in tried for c in t["usage"]]}
 
     out = list(done.values())
     with cf.ThreadPoolExecutor(4) as ex:
         for i, res in enumerate(ex.map(work, todo), 1):
             out.append(res)
             tp.write_jsonl(path, out)
+            costs.record(f"accuracy {ym}", res.get("usage") or [])
             if i % 25 == 0 or i == len(todo):
                 tp.log(f"  {i}/{len(todo)}")
     errors = [a for a in out if "error" in a]
@@ -213,8 +221,7 @@ def report(months: list):
         cov = json.loads((tp.OUT / "coverage.json").read_text(encoding="utf-8")) \
             if (tp.OUT / "coverage.json").exists() else coverage(ym)
         audits = [a for a in tp.read_jsonl(tp.OUT / "audit.jsonl") if "result" in a]
-        cost = sum(a["usage"]["input_tokens"] * tp.PRICE_IN / 1e6 + a["usage"]["output_tokens"] * tp.PRICE_OUT / 1e6
-                   for a in audits)
+        cost = sum(costs.total_usd(a.get("usage")) for a in audits)
         dash = json.loads((tp.OUT / "dashboard_data.json").read_text(encoding="utf-8"))
 
         def tally(group):

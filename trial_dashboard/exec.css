@@ -65,6 +65,9 @@ h3 { margin: 0 0 4px; font: 600 14px var(--font-body); }
 .now-day .n { margin: 2px 0 4px; font: 800 26px/1.1 var(--font-display); font-stretch: 85%; }
 .now-day.has .n { color: var(--alert); }
 .now-day .where { margin: 0; font-size: 13.5px; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); padding: 8px 16px; font-size: 14px; }
+.btn:disabled { opacity: .6; cursor: default; }
+.check-status { margin: 0 0 10px; font-size: 14px; color: var(--accent); }
 .banner { margin: 10px 0 0; padding: 8px 12px; border-radius: 8px; font-size: 14px; background: var(--warn-soft); color: var(--warn); border: 1px solid currentColor; }
 
 /* Filters */

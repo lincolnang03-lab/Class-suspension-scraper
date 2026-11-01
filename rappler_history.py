@@ -32,12 +32,8 @@ def build_url(d: date) -> str:
 
 
 
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
+HEADERS = {  # says who we are (see web.UA); Rappler allows this, but not AI tools, so nothing here uses AI
+    "User-Agent": "WalangPasokChecker/1.0 (class-suspension tracker; +https://github.com/lincolnang03-lab/Class-suspension-scraper)",
     "Accept-Language": "en-US,en;q=0.9",
 }
 

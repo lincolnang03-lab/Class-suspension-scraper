@@ -2,18 +2,18 @@ name: Check for class suspensions
 
 on:
   schedule:
-    # GitHub runs schedules in UTC; the Philippines is UTC+8. Minutes are offset from :00/:30,
-    # when GitHub's scheduler is busiest and runs start late.
-    - cron: "7,37 8-22 * * *"   # every 30 min, 4:07 PM – 6:37 AM PH (when announcements come out)
-    - cron: "7 23,0-7 * * *"    # hourly, 7:07 AM – 3:07 PM PH
-  workflow_dispatch: {}         # "Run workflow" button, for a check right now
+    # Once a day at 5:07 AM Philippine time (21:07 UTC), after the overnight and early-morning
+    # announcements. Other checks happen only when someone presses "Check now" on the dashboard,
+    # which starts this workflow through api/refresh.js.
+    - cron: "7 21 * * *"
+  workflow_dispatch: {}
 
 concurrency:
   group: live-check             # never two checks at once: each one builds on the last one's state
   cancel-in-progress: false
 
 permissions:
-  contents: write               # to save live/ back to the repo
+  contents: write               # to save live/ and costs/ back to the repo
 
 jobs:
   check:
@@ -46,11 +46,12 @@ jobs:
           git config user.name "walang-pasok-checker"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add live/
+          if [ -d costs ]; then git add costs/; fi
           if git diff --cached --quiet; then echo "Nothing changed"; exit 0; fi
           git commit -m "Live check $(date -u +%Y-%m-%dT%H:%MZ)"
           git pull --rebase --quiet
           git push
-      # The repo is private, so the site can't read live/ from here: publish it with the page instead
+      # Republish the site with the new results (also what the dashboard's Check now button waits for)
       - name: Update the site
         if: env.HAS_KEY == 'true' && env.HAS_VERCEL == 'true'
         working-directory: trial_dashboard
