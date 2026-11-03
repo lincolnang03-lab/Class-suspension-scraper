@@ -191,6 +191,9 @@ select {
 .more-btn { margin-top: 12px; }
 
 /* ── Breakdown: every place, by date ────────────────────────────────────── */
+.search-help { margin: 0 0 10px; font-size: 0.9375rem; }
+#town-result:not(:empty) { margin-bottom: 8px; }
+.bydate .search + #town-result + .now-days, .bydate #town-result + .now-days { margin-top: 20px; }
 .check-status { margin: -4px 0 14px; font-size: 0.9375rem; color: var(--accent); }
 .banner { margin: 14px 0 0; padding: 10px 14px; border-radius: var(--radius-sm); font-size: 0.9375rem; background: var(--warn-soft); color: var(--warn); }
 .now-days { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; }

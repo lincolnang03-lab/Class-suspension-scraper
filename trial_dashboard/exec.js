@@ -314,12 +314,14 @@
       backgroundColor: css(color), borderWidth: 0, borderRadius: 3, maxBarThickness: 34 })).filter((ds) => ds.data.some(Boolean));
     draw("c-timeline", {
       type: "bar",
-      data: { labels: months.map((m) => `${MON[+m.slice(5) - 1]} '${m.slice(2, 4)}`), datasets },
+      // Month on top; the year underneath only at January and the first bar
+      data: { labels: months.map((m, i) => (i === 0 || m.endsWith("-01") ? [MON[+m.slice(5) - 1], m.slice(0, 4)] : MON[+m.slice(5) - 1])), datasets },
       options: {
         responsive: true, maintainAspectRatio: false, layout: { padding: { top: 22 } },
         plugins: {
           legend: { position: "top", align: "start", labels: { boxWidth: 14, boxHeight: 14, padding: 16, color: css("--ink"), font: { size: 13 } } },
-          tooltip: { mode: "index", filter: (i) => i.raw > 0 },
+          tooltip: { mode: "index", filter: (i) => i.raw > 0,
+            callbacks: { title: (items) => { const m = months[items[0].dataIndex]; return `${MONTH_FULL[+m.slice(5) - 1]} ${m.slice(0, 4)}`; } } },
         },
         scales: {
           x: { stacked: true, grid: { display: false }, ticks: { autoSkip: window.innerWidth < 760, autoSkipPadding: 6, maxRotation: 0, minRotation: 0, font: { size: 12 } } },
