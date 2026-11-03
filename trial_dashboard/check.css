@@ -1,6 +1,6 @@
 /* Walang Pasok? — one question, one answer. Phone first. */
 :root {
-  --bg: #eef2f4;
+  --bg: #ffffff;
   --surface: #ffffff;
   --ink: #13222d;
   --muted: #5a6a76;
@@ -19,23 +19,6 @@
   --radius: 12px;
   color-scheme: light;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0e171d; --surface: #15222b; --ink: #e5edf2; --muted: #93a4b0; --line: #26363f;
-    --accent: #6fb2e0; --accent-soft: #1b3344;
-    --alert: #ff8a73; --alert-soft: #3a1d17; --warn: #f0b062; --warn-soft: #33260f;
-    --calm: #7fd0a8; --calm-soft: #15302a;
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #0e171d; --surface: #15222b; --ink: #e5edf2; --muted: #93a4b0; --line: #26363f;
-  --accent: #6fb2e0; --accent-soft: #1b3344;
-  --alert: #ff8a73; --alert-soft: #3a1d17; --warn: #f0b062; --warn-soft: #33260f;
-  --calm: #7fd0a8; --calm-soft: #15302a;
-  color-scheme: dark;
-}
-
 * { box-sizing: border-box; }
 body {
   margin: 0;

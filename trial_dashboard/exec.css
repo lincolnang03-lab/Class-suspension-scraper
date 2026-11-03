@@ -1,41 +1,29 @@
 /* Lost School Days — an executive brief on class suspensions. */
 :root {
-  --bg: #f1f3f2;
+  /* Light theme only: a white page, white cards, light grey only for small accents */
+  --bg: #ffffff;
   --surface: #ffffff;
+  --soft: #f4f6f6;
   --ink: #15211f;
   --muted: #5d6b68;
-  --line: #dde3e1;
+  --line: #e1e6e5;
   --accent: #155e63;
-  --accent-soft: #dcebeb;
+  --accent-soft: #e3efef;
   --alert: #b3361f;
-  --alert-soft: #fbe9e4;
+  --alert-soft: #fdf0ec;
   --warn: #93590f;
-  --warn-soft: #faefdc;
-  /* causes */
-  --c1: #155e63; --c2: #d1603d; --c3: #6b4fa0; --c4: #8a6d2f; --c5: #3f7fbf;
-  --c6: #5a9c6e; --c7: #2a9d8f; --c8: #7d8b88; --c9: #b9c2bf;
+  --warn-soft: #fbf3e4;
+  /* cause groups in the charts: distinct hues, readable on white */
+  --g1: #155e63;   /* typhoons and storms */
+  --g2: #4a8fd6;   /* monsoon and other rain */
+  --g3: #e0782f;   /* extreme heat */
+  --g4: #9aa5a3;   /* other */
 
   --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --font-body: "Public Sans", "Segoe UI", system-ui, sans-serif;
   --font-data: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --radius: 12px;
   color-scheme: light;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0f1615; --surface: #172120; --ink: #e6eeec; --muted: #9aaaa6; --line: #2a3735;
-    --accent: #6cc3c4; --accent-soft: #1d3634; --alert: #ff8a73; --alert-soft: #3a1d17; --warn: #f0b062; --warn-soft: #33260f;
-    --c1: #6cc3c4; --c2: #f08a64; --c3: #a78bdb; --c4: #c9a55a; --c5: #79aee6;
-    --c6: #86c99a; --c7: #4fd0bf; --c8: #a3b1ae; --c9: #56625f;
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #0f1615; --surface: #172120; --ink: #e6eeec; --muted: #9aaaa6; --line: #2a3735;
-  --accent: #6cc3c4; --accent-soft: #1d3634; --alert: #ff8a73; --alert-soft: #3a1d17; --warn: #f0b062; --warn-soft: #33260f;
-  --c1: #6cc3c4; --c2: #f08a64; --c3: #a78bdb; --c4: #c9a55a; --c5: #79aee6;
-  --c6: #86c99a; --c7: #4fd0bf; --c8: #a3b1ae; --c9: #56625f;
-  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -47,7 +35,7 @@ h2 { margin: 0; font: 700 19px/1.25 var(--font-display); font-stretch: 88%; }
 h3 { margin: 0 0 4px; font: 600 14px var(--font-body); }
 .kicker { margin: 0; font: 600 12px var(--font-body); letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
 .lede { margin: 8px 0 0; color: var(--muted); max-width: 68ch; }
-.top { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.top { display: block; }
 .check-link { color: var(--accent); font-weight: 600; text-decoration: none; white-space: nowrap; }
 .check-link:hover { text-decoration: underline; }
 
@@ -113,7 +101,7 @@ h3 { margin: 0 0 4px; font: 600 14px var(--font-body); }
 
 /* Filters */
 .filters { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: flex-end; position: sticky; top: 0; z-index: 5;
-  background: var(--bg); padding: 8px 0; }
+  background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line); }
 .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
 .seg button { border: 0; background: none; color: var(--ink); font: 500 14px var(--font-body); padding: 8px 14px; cursor: pointer; border-right: 1px solid var(--line); }
 .seg button:last-child { border-right: 0; }
@@ -134,14 +122,17 @@ button:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid
 .findings b { font-weight: 700; }
 
 .chart { position: relative; height: 280px; }
-.chart.tall { height: 320px; }
+.chart.tall { height: 380px; }
+.chart.short { height: 240px; }
 .outlook { margin: 12px 0 0; font-size: 14px; }
 
 /* Tables */
 .table-wrap { overflow-x: auto; }
 .tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .tbl th, .tbl td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
-.tbl th { font: 600 12px var(--font-body); color: var(--muted); white-space: nowrap; cursor: pointer; user-select: none; }
+.tbl th { font: 600 12px var(--font-body); color: var(--muted); white-space: nowrap; }
+.tbl th .sort { all: unset; cursor: pointer; }
+.tbl th .sort:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .tbl th[aria-sort="descending"]::after { content: " ↓"; }
 .tbl th[aria-sort="ascending"]::after { content: " ↑"; }
 .tbl td.num, .tbl th.num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -165,3 +156,26 @@ button:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid
 .method-grid p { margin: 0 0 8px; }
 .method-grid b, .method-grid h3 { color: var(--ink); }
 .footer { font-size: 12.5px; color: var(--muted); }
+
+/* Breakdown: check a city or town */
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.town-search { display: flex; gap: 8px; }
+.town-search input {
+  flex: 1; min-width: 0; font: 17px var(--font-body); color: var(--ink); background: var(--surface);
+  border: 1.5px solid var(--line); border-radius: 10px; padding: 12px 14px;
+}
+.town-search input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+.town-card { margin-top: 14px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--soft); display: grid; gap: 10px; }
+.town-card h3 { margin: 0; font: 700 19px var(--font-display); font-stretch: 88%; }
+.town-card h3 span { font: 400 14px var(--font-body); color: var(--muted); }
+.town-now { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+.town-now p, .town-lost { margin: 0; font-size: 14.5px; }
+.pill { display: inline-block; margin-left: 6px; padding: 3px 10px; border-radius: 999px; font: 600 13px var(--font-body);
+  background: var(--surface); border: 1px solid var(--line); color: var(--muted); }
+.pill.on { background: var(--alert-soft); border-color: var(--alert); color: var(--alert); }
+.pill.lifted { color: var(--accent); border-color: var(--accent); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 500 13px var(--font-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+.chip:hover { border-color: var(--accent); color: var(--accent); }
+.tbl .pct-cell b { font-family: var(--font-data); font-size: 13.5px; }

@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 import reader
+import school_calendar
 import trial_pipeline as tp
 from web import get, html_to_text, log
 
@@ -146,6 +147,7 @@ def main():
         "causes": [c for c, _ in CAUSES] + ["Not stated"],
         "days": days,
         "records": records,
+        "calendar": school_calendar.as_json(),
     }
     OUT.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     from collections import Counter

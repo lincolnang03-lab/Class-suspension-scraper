@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
 <title>Lost School Days</title>
-<meta name="description" content="Class suspensions in the Philippines since 2025: where and why school days are lost, what is coming up, and what the seasons suggest.">
+<meta name="description" content="Class suspensions in the Philippines since 2025: how many school days are lost, where and why, and what is announced for today and tomorrow.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -18,17 +19,14 @@
 <div class="page">
 
   <header class="top">
-    <div>
-      <p class="kicker">Philippines · basic and higher education</p>
-      <h1>Lost School Days</h1>
-      <p class="lede" id="lede">Every class suspension announced by a city, town, province or Malacañang since 2025: where school days are lost, why, and what is coming up.</p>
-    </div>
-    <a class="check-link" href="check.html">Check a city or town →</a>
+    <p class="kicker">Philippines · basic and higher education</p>
+    <h1>Lost School Days</h1>
+    <p class="lede" id="lede">Every class suspension announced by a city, town, province or Malacañang since January 2025, measured against the school days in the calendar.</p>
   </header>
 
+  <!-- ═══ Overall ═══ -->
   <h2 class="section-title">Overall</h2>
 
-  <!-- Filters -->
   <section class="filters" aria-label="Filters">
     <div class="seg" id="f-year" role="group" aria-label="Year"></div>
     <label class="field"><span>Region</span><select id="f-region"></select></label>
@@ -44,50 +42,48 @@
   <section class="card" aria-labelledby="timeline-title">
     <div class="card-head row">
       <div>
-        <h2 id="timeline-title">When suspensions happen</h2>
+        <h2 id="timeline-title">School days lost, month by month</h2>
         <p class="muted" id="timeline-sub"></p>
       </div>
       <div class="seg small" id="f-metric" role="group" aria-label="Measure"></div>
     </div>
-    <div class="chart tall"><canvas id="c-timeline" role="img" aria-label="Suspensions by month and cause"></canvas></div>
+    <div class="chart tall"><canvas id="c-timeline" role="img" aria-label="Class suspensions by month and cause"></canvas></div>
   </section>
 
-  <div class="two">
-    <section class="card" aria-labelledby="cause-title">
-      <div class="card-head"><h2 id="cause-title">Why classes were suspended</h2><p class="muted">School days with suspensions, by the cause the announcements gave.</p></div>
-      <div class="chart"><canvas id="c-cause" role="img" aria-label="Days by cause"></canvas></div>
-    </section>
-    <section class="card" aria-labelledby="season-title">
-      <div class="card-head"><h2 id="season-title">The season ahead</h2><p class="muted" id="season-sub"></p></div>
-      <div class="chart"><canvas id="c-season" role="img" aria-label="Average suspension days per month"></canvas></div>
-      <p class="outlook" id="outlook"></p>
-    </section>
-  </div>
+  <section class="card" aria-labelledby="cause-title">
+    <div class="card-head"><h2 id="cause-title">Why classes were suspended</h2><p class="muted">School days with suspensions, by the cause the announcements gave.</p></div>
+    <div class="chart short"><canvas id="c-cause" role="img" aria-label="School days by cause"></canvas></div>
+  </section>
+
+  <!-- ═══ Per-date breakdown ═══ -->
+  <h2 class="section-title" id="breakdown">Per-date breakdown</h2>
+
+  <section class="card" aria-labelledby="town-title">
+    <div class="card-head">
+      <h2 id="town-title">Check a city or town</h2>
+      <p class="muted" id="town-help">Type a city or town to see whether its classes are suspended today or tomorrow, and how many school days it has lost.</p>
+    </div>
+    <div class="town-search">
+      <label for="town" class="visually-hidden">City or town</label>
+      <input id="town" type="search" list="town-list" autocomplete="off" spellcheck="false"
+             placeholder="Start typing, e.g. Marikina or Malolos" aria-describedby="town-help">
+      <datalist id="town-list"></datalist>
+      <button type="button" class="btn" id="town-clear" hidden>Clear</button>
+    </div>
+    <div id="town-result" aria-live="polite"></div>
+  </section>
 
   <section class="card" aria-labelledby="prov-title">
     <div class="card-head row">
       <div>
         <h2 id="prov-title">Where school days are lost</h2>
-        <p class="muted">Provinces by the number of school days on which at least one of their LGUs suspended classes.</p>
+        <p class="muted" id="prov-sub"></p>
       </div>
       <button type="button" class="btn" id="dl-prov">Download CSV</button>
     </div>
     <div class="table-wrap"><table class="tbl" id="t-prov"></table></div>
     <button type="button" class="more" id="prov-more" hidden></button>
   </section>
-
-  <div class="two">
-    <section class="card" aria-labelledby="events-title">
-      <div class="card-head"><h2 id="events-title">Biggest events</h2><p class="muted">Storms and other events that suspended classes in the most places.</p></div>
-      <div class="table-wrap"><table class="tbl" id="t-events"></table></div>
-    </section>
-    <section class="card" aria-labelledby="levels-title">
-      <div class="card-head"><h2 id="levels-title">What kind of suspension</h2><p class="muted">Share of LGU suspensions.</p></div>
-      <div class="bars" id="levels"></div>
-    </section>
-  </div>
-
-  <h2 class="section-title" id="bydate-anchor">Per-date breakdown</h2>
 
   <section class="card bydate" aria-labelledby="bydate-title">
     <div class="card-head row">
@@ -106,7 +102,6 @@
       <button type="button" class="btn" id="dl-date">Download this date (CSV)</button>
     </div>
     <div class="table-wrap"><table class="tbl bd" id="t-date"></table></div>
-    <p class="muted small-note">Confidence: 5 = three or more outlets, or PNA/DepEd plus another; 4 = two outlets, or PNA/DepEd alone; 3 = one outlet; one point less for each missing detail (levels, public/private) or a quote not found word for word. Past dates come from Rappler's roundups only, so they score 3 at most.</p>
   </section>
 
   <section class="card method" aria-labelledby="method-title">
@@ -116,19 +111,14 @@
     </div>
     <div class="method-grid">
       <div>
-        <h3>Past suspensions</h3>
-        <p>Every place listed in Rappler's daily <i>#WalangPasok</i> roundups, read automatically and checked against the official PSGC list of provinces, cities and towns. The cause of each day comes from the roundup's own opening line (for example “due to Tropical Storm Enteng”).</p>
-        <p><b>LGU suspension</b> = one city, town or province suspending classes for one day. <b>School days with suspensions</b> = calendar days on which at least one LGU in the selected area did. A province's count includes days when only some of its towns suspended.</p>
+        <h3>Definitions</h3>
+        <p><b>LGU suspension</b>: one city, town or province suspending classes for one day. <b>School days lost</b>: school days on which at least one LGU in the area suspended classes; a province counts a day even if only some of its towns suspended.</p>
+        <p><b>School days</b>: every day in the period minus weekends, DepEd school breaks and national holidays (<span id="cal-count"></span>). Local holidays and private-school calendars can differ, so the percentage is an estimate.</p>
       </div>
       <div>
-        <h3>Limits</h3>
-        <p>These are a <b>lower bound</b>. Rappler compiles roundups on days with widespread suspensions, so single-town suspensions (floods, bomb threats, local heat) are often missing: in a July 2024 test, reading more outlets found about 50% more suspended places than Rappler's lists alone. The past data will be rebuilt from all the major outlets below.</p>
-        <p>“Face-to-face only” suspensions moved classes to modular or online learning instead of cancelling them.</p>
-      </div>
-      <div>
-        <h3>Upcoming suspensions</h3>
-        <p>Checked every day at 5 AM, and whenever someone presses <b>Check now</b>, from the major outlets: PNA, DepEd and GMA (read by AI, which quotes the article for every place it lists) and Rappler's daily roundup (read without AI, as Rappler asks). Inquirer blocks automated reading of its articles, so it isn't included yet. “The season ahead” is the 2025 average for each month, not a forecast.</p>
-        <p id="coverage"></p>
+        <h3>Sources and limits</h3>
+        <p>Past days come from Rappler's daily <i>#WalangPasok</i> roundups, checked against the official PSGC list of places. Rappler's lists miss many single-town suspensions, so the counts are a <b>lower bound</b>. Coming days are checked every morning, or on demand, from PNA, DepEd and GMA (read by AI, which quotes the article) and Rappler (read without AI, as Rappler asks).</p>
+        <p><b>Confidence</b> (1–5): 5 = three or more outlets, or PNA/DepEd plus another; 4 = two outlets, or PNA/DepEd alone; 3 = one outlet; one point less for each missing detail. Past days come from Rappler alone, so they score 3 at most.</p>
       </div>
     </div>
   </section>

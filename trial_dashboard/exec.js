@@ -1,4 +1,5 @@
-/* Lost School Days — figures computed in the browser from history.json (past) and data.json (upcoming). */
+/* Lost School Days — figures computed in the browser from history.json (past), data.json (coming days)
+   and places.json (every city and town). */
 (() => {
   const REGION_ORDER = [
     "NCR", "CAR", "Ilocos Region", "Cagayan Valley", "Central Luzon", "CALABARZON", "MIMAROPA",
@@ -8,9 +9,19 @@
   const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const MONTH_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const LEVEL_LABELS = ["Preschool", "Elementary", "Junior High", "Senior High", "College"];
+  const LEVEL_KEYS = ["preschool", "elementary", "junior_high", "senior_high", "college"];
   const ACTIVE = new Set(["suspended", "online_or_modular", "opening_postponed"]);
+  const SHOWN = new Set([...ACTIVE, "lifted"]);
   const PROV_SHOWN = 15;
+  // Causes, grouped so the month-by-month chart has four clear colours
+  const GROUPS = [
+    ["Typhoons and storms", ["Typhoon / tropical storm"], "--g1"],
+    ["Monsoon and other rain", ["Monsoon rains", "Low pressure area / shear line", "Rain and flooding"], "--g2"],
+    ["Extreme heat", ["Extreme heat"], "--g3"],
+    ["Other", ["Earthquake", "Volcanic activity", "Transport strike", "Not stated"], "--g4"],
+  ];
 
+  // ── Helpers ───────────────────────────────────────────────────────────────
   const $ = (s) => document.querySelector(s);
   const el = (tag, props = {}, ...kids) => {
     const n = document.createElement(tag);
@@ -25,7 +36,8 @@
   };
   const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
   const fmt = (n) => n.toLocaleString("en-US");
-  const pct = (a, b) => (b ? Math.round((100 * a) / b) : 0);
+  const pct = (a, b) => (b ? (100 * a) / b : 0);
+  const pctText = (a, b) => { const p = pct(a, b); return `${p > 0 && p < 1 ? p.toFixed(1) : Math.round(p)}%`; };
   const plural = (n, w, ws = `${w}s`) => `${fmt(n)} ${n === 1 ? w : ws}`;
   const regionRank = (r) => REGION_ORDER.indexOf(r) + 1 || 99;
   const phToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(new Date());
@@ -34,9 +46,19 @@
   const timeText = (iso) => new Date(iso).toLocaleString("en-US", { timeZone: "Asia/Manila", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   const unique = (xs) => [...new Set(xs)];
   const countBy = (xs, f) => xs.reduce((m, x) => m.set(f(x), (m.get(f(x)) || 0) + 1), new Map());
+  // Same place matching as the scraper (place_key in trial_pipeline.py)
+  const ALIASES = { montalban: "rodriguez", "general santos": "gensan" };
+  const placeKey = (s) => {
+    const k = (s || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[‘’“”'"`]/g, "")
+      .replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim()
+      .replace(/^city of /, "").replace(/ city$/, "").replace(/^(municipality|town) of /, "").replace(/ (town|municipality)$/, "");
+    return ALIASES[k] || k;
+  };
 
-  const state = { year: "all", region: "", metric: "lgu", provSort: "days", provDir: -1, provAll: false, date: "" };
-  let H = null, LIVE = null, RECS = [], CAUSES = [], YEARS = [], FULL_YEARS = [];
+  const params = new URLSearchParams(location.search);
+  const state = { year: "all", region: "", metric: "days", provSort: "pct", provDir: -1, provAll: false, date: "", town: null };
+  let H = null, LIVE = null, RECS = [], YEARS = [], PLACES = [], uniqueNames = new Set();
+  let HOLIDAYS = new Set(), BREAKS = [];
   const charts = {};
 
   // ── Load ──────────────────────────────────────────────────────────────────
@@ -47,29 +69,59 @@
     return attempt(0);
   };
 
-  Promise.all([getJSON("history.json"), loadLive().catch(() => null)]).then(([h, live]) => {
-    H = h;
-    LIVE = live;
-    CAUSES = h.causes;
-    RECS = h.records.map(([date, region, province, city, scope, mask, sector, inPerson, partDay]) => ({
-      date, region, province, city, scope, mask, sector, inPerson: !!inPerson, partDay: !!partDay,
-      year: date.slice(0, 4), month: date.slice(0, 7), cause: h.days[date].cause,
-    }));
-    YEARS = unique(RECS.map((r) => r.year)).sort();
-    // A year counts as complete for averages if the data covers January to December
-    FULL_YEARS = h.covered.filter(([a, b]) => a.endsWith("-01-01") && b.endsWith("-12-31")).map(([a]) => a.slice(0, 4));
-    buildControls();
-    render();
-    setInterval(() => loadLive().then((l) => { LIVE = l; renderNow(); }).catch(() => {}), 5 * 60 * 1000);
-  }).catch((e) => { $("#lede").textContent = `Couldn't load the data (${e.message}).`; });
+  Promise.all([getJSON("history.json"), loadLive().catch(() => null), getJSON("places.json").catch(() => ({ places: [] }))])
+    .then(([h, live, places]) => {
+      H = h;
+      LIVE = live;
+      RECS = h.records.map(([date, region, province, city, scope, mask, sector, inPerson, partDay]) => ({
+        date, region, province, city, scope, mask, sector, inPerson: !!inPerson, partDay: !!partDay,
+        year: date.slice(0, 4), month: date.slice(0, 7), cause: h.days[date].cause,
+      }));
+      YEARS = unique(RECS.map((r) => r.year)).sort();
+      HOLIDAYS = new Set((h.calendar?.holidays || []).map(([d]) => d));
+      BREAKS = (h.calendar?.breaks || []).map(([a, b]) => [a, b]);
+      PLACES = places.places.map(([region, province, name, isCity, independent]) =>
+        ({ region, province, name, isCity: !!isCity, independent: !!independent, label: `${name}, ${province}` }));
+      const counts = countBy(PLACES, (p) => placeKey(p.name));
+      uniqueNames = new Set([...counts].filter(([, n]) => n === 1).map(([k]) => k));
+      const wantDate = params.get("date");
+      if (/^\d{4}-\d{2}-\d{2}$/.test(wantDate || "")) state.date = wantDate;
+      state.town = PLACES.find((p) => p.label.toLowerCase() === (params.get("town") || "").toLowerCase()) || null;
+      buildControls();
+      render();
+      setInterval(() => loadLive().then((l) => { LIVE = l; renderBreakdownLive(); }).catch(() => {}), 5 * 60 * 1000);
+    })
+    .catch((e) => { $("#lede").textContent = `Couldn't load the data (${e.message}).`; });
+
+  // ── School days ───────────────────────────────────────────────────────────
+  function isSchoolDay(iso) {
+    const wd = new Date(`${iso}T00:00:00Z`).getUTCDay();
+    return wd !== 0 && wd !== 6 && !HOLIDAYS.has(iso) && !BREAKS.some(([a, b]) => iso >= a && iso <= b);
+  }
+  const lastDate = () => H.covered[H.covered.length - 1][1];
+  function periodRange() {
+    if (state.year === "all") return [H.covered[0][0], lastDate()];
+    const end = `${state.year}-12-31`;
+    return [`${state.year}-01-01`, end < lastDate() ? end : lastDate()];
+  }
+  const schoolDayCache = new Map();
+  function schoolDays() {
+    const [a, b] = periodRange();
+    const key = `${a}|${b}`;
+    if (!schoolDayCache.has(key)) {
+      let n = 0;
+      for (let d = a; d <= b; d = addDays(d, 1)) if (isSchoolDay(d)) n += 1;
+      schoolDayCache.set(key, n);
+    }
+    return schoolDayCache.get(key);
+  }
+  const lostDays = (rs) => unique(rs.map((r) => r.date)).filter(isSchoolDay);
 
   // ── Filters ───────────────────────────────────────────────────────────────
-  function lastDate() { return H.covered[H.covered.length - 1][1]; }
   function yearLabel(y) {
     const end = lastDate();
     return y === end.slice(0, 4) && !end.endsWith("-12-31") ? `${y} (to ${dayLabel(end, { month: "short", day: "numeric" })})` : y;
   }
-
   function seg(root, options, current, onPick) {
     root.replaceChildren(...options.map(([v, label]) => {
       const b = el("button", { type: "button", "aria-pressed": String(v === current), text: label });
@@ -77,6 +129,14 @@
       return b;
     }));
   }
+  const inRegion = (r) => !state.region || r.region === state.region;
+  const filtered = () => RECS.filter((r) => (state.year === "all" || r.year === state.year) && inRegion(r));
+  const lguOnly = (rs) => rs.filter((r) => r.scope !== "partial");
+  const where = () => (state.region ? ` in ${state.region}` : "");
+  const period = () => {
+    const [a, b] = periodRange();
+    return `${dayLabel(a, { month: "short", day: "numeric", year: "numeric" })} to ${dayLabel(b, { month: "short", day: "numeric", year: "numeric" })}`;
+  };
 
   function buildControls() {
     const drawYear = () => seg($("#f-year"), [["all", `All (${YEARS[0]}–${YEARS[YEARS.length - 1]})`], ...YEARS.map((y) => [y, yearLabel(y)])],
@@ -85,32 +145,36 @@
     const regions = unique(RECS.map((r) => r.region).filter(Boolean)).sort((a, b) => regionRank(a) - regionRank(b));
     $("#f-region").replaceChildren(el("option", { value: "", text: "All regions" }), ...regions.map((r) => el("option", { value: r, text: r })));
     $("#f-region").addEventListener("change", (e) => { state.region = e.target.value; render(); });
-    const drawMetric = () => seg($("#f-metric"), [["lgu", "LGU suspensions"], ["days", "School days"]], state.metric,
+    const drawMetric = () => seg($("#f-metric"), [["days", "School days lost"], ["lgu", "LGU suspensions"]], state.metric,
       (v) => { state.metric = v; drawMetric(); renderTimeline(filtered()); });
     drawMetric();
-    $("#dl-prov").addEventListener("click", () => downloadCsv("provinces", provinceRows(filtered()).map((p) => ({
-      province: p.province, region: p.region, school_days_with_suspensions: p.days, province_wide_days: p.wideDays,
-      cities_and_towns_affected: p.towns, lgu_suspensions: p.lgu, main_cause: p.cause }))));
-    $("#dl-all").addEventListener("click", () => downloadCsv("class_suspensions", filtered().map((r) => ({
-      date: r.date, region: r.region, province: r.province, city_or_town: r.city || "(whole province)", scope: r.scope,
-      levels: r.mask < 0 ? "not stated" : LEVEL_LABELS.filter((_, i) => r.mask & (1 << i)).join("; "),
-      public_private: r.sector || "not stated", face_to_face_only: r.inPerson ? "yes" : "no", part_of_day: r.partDay ? "yes" : "no",
-      cause: r.cause, storm: H.days[r.date].storms.join("; "), source: H.days[r.date].url }))));
+
+    $("#town-list").replaceChildren(...PLACES.map((p) => el("option", { value: p.label })));
+    const pickTown = () => {
+      const v = $("#town").value.trim().toLowerCase();
+      const found = PLACES.find((p) => p.label.toLowerCase() === v);
+      if (found || !v) { state.town = found || null; renderTown(); }
+    };
+    $("#town").addEventListener("change", pickTown);
+    $("#town").addEventListener("input", () => { if (PLACES.some((p) => p.label === $("#town").value)) pickTown(); });
+    $("#town-clear").addEventListener("click", () => { $("#town").value = ""; state.town = null; renderTown(); $("#town").focus(); });
+    if (state.town) $("#town").value = state.town.label;
+
     $("#prov-more").addEventListener("click", () => { state.provAll = !state.provAll; renderProvinces(filtered()); });
     $("#f-date").addEventListener("change", (e) => { state.date = e.target.value; renderByDate(); });
-    // A shared link can open a given date: ?date=2026-08-06
-    const wanted = new URLSearchParams(location.search).get("date");
-    if (/^\d{4}-\d{2}-\d{2}$/.test(wanted || "")) state.date = wanted;
+    $("#dl-prov").addEventListener("click", () => downloadCsv("school_days_lost_by_province", provinceRows(filtered()).map((p) => ({
+      province: p.province, region: p.region, school_days_lost: p.days, school_days_in_period: schoolDays(),
+      percent_of_school_days: pct(p.days, schoolDays()).toFixed(1), whole_province_days: p.wideDays,
+      cities_and_towns_affected: p.towns, main_cause: p.cause }))));
     $("#dl-date").addEventListener("click", () => downloadCsv(`class_suspensions_${state.date}`, rowsFor(state.date).map((r) => ({
       date: r.date, region: r.region, province: r.province, city_or_town: placeName(r), levels_suspended: levelsText(r.mask),
       details: r.notes.join("; "), confidence: r.conf, confidence_reason: r.why, outlets: r.outlets.join("; "), source: r.url || "" }))));
+    $("#dl-all").addEventListener("click", () => downloadCsv("class_suspensions", filtered().map((r) => ({
+      date: r.date, school_day: isSchoolDay(r.date) ? "yes" : "no", region: r.region, province: r.province,
+      city_or_town: r.city || "(whole province)", scope: r.scope, levels: levelsText(r.mask),
+      public_private: r.sector || "not stated", face_to_face_only: r.inPerson ? "yes" : "no", part_of_day: r.partDay ? "yes" : "no",
+      cause: r.cause, storm: H.days[r.date].storms.join("; "), source: H.days[r.date].url }))));
   }
-
-  const inRegion = (r) => !state.region || r.region === state.region;
-  const filtered = () => RECS.filter((r) => (state.year === "all" || r.year === state.year) && inRegion(r));
-  const lguOnly = (rs) => rs.filter((r) => r.scope !== "partial");
-  const where = () => (state.region ? ` in ${state.region}` : "");
-  const period = () => (state.year === "all" ? `${dayLabel(H.covered[0][0], { month: "short", year: "numeric" })} to ${dayLabel(lastDate(), { month: "short", day: "numeric", year: "numeric" })}` : yearLabel(state.year));
 
   function render() {
     const rs = filtered();
@@ -118,121 +182,138 @@
     renderFindings(rs);
     renderTimeline(rs);
     renderCauses(rs);
-    renderSeason();
+    renderTown();
     renderProvinces(rs);
-    renderEvents(rs);
-    renderLevels(rs);
-    if (H) renderNow();
-    $("#coverage").textContent = `Past data covers ${H.covered.map(([a, b]) => `${dayLabel(a, { month: "short", day: "numeric", year: "numeric" })} – ${dayLabel(b, { month: "short", day: "numeric", year: "numeric" })}`).join("; ")}.`;
-    $("#footer").textContent = `Built from ${fmt(RECS.length)} records on ${unique(RECS.map((r) => r.date)).length} days. Source: ${H.source}; upcoming suspensions from the live news checker.`;
+    renderBreakdownLive();
+    $("#cal-count").textContent = `${fmt(schoolDays())} school days from ${period()}`;
+    $("#footer").textContent = `Past data: ${fmt(RECS.length)} records on ${unique(RECS.map((r) => r.date)).length} days, to ${dayLabel(lastDate(), { month: "long", day: "numeric", year: "numeric" })}. Source: ${H.source}; coming days from the live news check.`;
   }
 
-  // ── Key figures ───────────────────────────────────────────────────────────
+  // ── Overall: key figures ──────────────────────────────────────────────────
   function provinceRows(rs) {
     const by = new Map();
-    rs.filter((r) => r.province).forEach((r) => {
-      if (!by.has(r.province)) by.set(r.province, []);
-      by.get(r.province).push(r);
-    });
+    rs.filter((r) => r.province).forEach((r) => { if (!by.has(r.province)) by.set(r.province, []); by.get(r.province).push(r); });
     return [...by].map(([province, list]) => {
-      const lgu = lguOnly(list);
-      const days = unique(list.map((r) => r.date));
+      const days = lostDays(list);
       const causes = countBy(days, (d) => H.days[d].cause);
       return {
-        province, region: list[0].region, days: days.length,
-        wideDays: unique(list.filter((r) => r.scope === "province").map((r) => r.date)).length,
-        towns: unique(lgu.filter((r) => r.city).map((r) => r.city.toLowerCase())).length,
-        lgu: lgu.length,
-        cause: [...causes].sort((a, b) => b[1] - a[1])[0][0],
+        province, region: list[0].region, days: days.length, pct: pct(days.length, schoolDays()),
+        wideDays: lostDays(list.filter((r) => r.scope === "province")).length,
+        towns: unique(lguOnly(list).filter((r) => r.city).map((r) => r.city.toLowerCase())).length,
+        cause: causes.size ? [...causes].sort((a, b) => b[1] - a[1])[0][0] : "—",
       };
-    });
+    }).filter((p) => p.days > 0);
   }
 
   function renderKpis(rs) {
-    const lgu = lguOnly(rs);
-    const days = unique(rs.map((r) => r.date));
+    const lost = lostDays(rs).length;
+    const total = schoolDays();
     const provs = provinceRows(rs).sort((a, b) => b.days - a.days);
-    const typhoonDays = days.filter((d) => H.days[d].cause === "Typhoon / tropical storm").length;
     const kpi = (v, l, s) => el("div", { class: "kpi" }, el("p", { class: "v", text: v }), el("p", { class: "l", text: l }), el("p", { class: "s", text: s }));
     $("#kpis").replaceChildren(
-      kpi(fmt(days.length), "School days with suspensions", `days when at least one LGU${where()} suspended classes`),
-      kpi(fmt(lgu.length), "LGU suspensions", "one city, town or province suspending classes for one day"),
+      kpi(pctText(lost, total), "of school days had a suspension", `${fmt(lost)} of ${fmt(total)} school days, somewhere${where() || " in the country"}`),
+      kpi(fmt(lguOnly(rs).length), "LGU suspensions", "one city, town or province suspending classes for one day"),
       kpi(fmt(provs.length), "Provinces affected", state.region ? `in ${state.region}` : "including Metro Manila"),
-      provs.length ? kpi(`${provs[0].days} days`, `Hardest hit: ${provs[0].province}`, `school days with a suspension somewhere in the province`) : kpi("—", "Hardest hit", ""),
-      kpi(`${pct(typhoonDays, days.length)}%`, "Of suspension days caused by typhoons", `${typhoonDays} of ${days.length} days`),
+      provs.length ? kpi(pctText(provs[0].days, total), `Hardest hit: ${provs[0].province}`, `${fmt(provs[0].days)} of ${fmt(total)} school days lost`)
+        : kpi("—", "Hardest hit", ""),
     );
   }
 
-  // ── Findings, written from the figures ────────────────────────────────────
+  // ── Overall: findings (merges the old events and "kind of suspension" panels) ──
+  function stormEvents(rs) {
+    const events = [];
+    unique(rs.map((r) => r.date)).sort().forEach((d) => {
+      const storm = H.days[d].storms[0];
+      if (!storm) return;
+      const e = events.find((x) => x.storm === storm && (new Date(d) - new Date(x.dates[x.dates.length - 1])) / 864e5 <= 7);
+      if (e) e.dates.push(d); else events.push({ storm, dates: [d] });
+    });
+    events.forEach((e) => { const s = new Set(e.dates); e.lgu = lguOnly(rs.filter((r) => s.has(r.date))).length; });
+    return events.sort((a, b) => b.lgu - a.lgu);
+  }
+
   function renderFindings(rs) {
     const out = [];
     const lgu = lguOnly(rs);
-    const days = unique(rs.map((r) => r.date));
-    if (!days.length) {
-      $("#findings").replaceChildren(el("li", { text: `No suspensions recorded${where()} in ${period()}.` }));
+    const lost = lostDays(rs);
+    const total = schoolDays();
+    if (!lost.length) {
+      $("#findings").replaceChildren(el("li", { text: `No class suspensions on school days${where()} from ${period()}.` }));
       return;
     }
     const b = (t) => el("b", { text: t });
-    out.push(el("li", {}, "From ", period(), where(), ", classes were suspended on ", b(plural(days.length, "school day")),
-      ", adding up to ", b(fmt(lgu.length)), " LGU suspensions (one city, town or province for one day).",
-      state.year === "all" ? ` By year: ${YEARS.map((y) => `${yearLabel(y)} — ${fmt(lguOnly(rs.filter((r) => r.year === y)).length)}`).join(", ")}.` : ""));
+    out.push(el("li", {}, "From ", period(), where(), ", classes were suspended somewhere on ", b(`${fmt(lost.length)} of ${fmt(total)} school days (${pctText(lost.length, total)})`),
+      `, adding up to ${fmt(lgu.length)} LGU suspensions.`,
+      state.year === "all" && YEARS.length > 1 ? ` By year: ${YEARS.map((y) => `${yearLabel(y)}: ${fmt(lguOnly(rs.filter((r) => r.year === y)).length)}`).join("; ")}.` : ""));
 
-    const byCause = [...countBy(days, (d) => H.days[d].cause)].sort((a, c) => c[1] - a[1]);
-    const heatDays = days.filter((d) => H.days[d].cause === "Extreme heat").sort();
-    out.push(el("li", {}, b(byCause[0][0]), ` was the leading cause, on ${byCause[0][1]} of ${days.length} days (${pct(byCause[0][1], days.length)}%)`,
-      byCause[1] ? `, followed by ${byCause[1][0].toLowerCase()} (${byCause[1][1]} days)` : "", ".",
-      heatDays.length ? el("span", {}, " ", b(`Extreme heat`), ` suspended classes on ${plural(heatDays.length, "day")}, all in ${unique(heatDays.map((d) => `${MONTH_FULL[+d.slice(5, 7) - 1]} ${d.slice(0, 4)}`)).join(", ")}: a cause tied to when the school year runs, not only to the weather.`) : ""));
+    const byCause = [...countBy(lost, (d) => H.days[d].cause)].sort((a, c) => c[1] - a[1]);
+    const heat = lost.filter((d) => H.days[d].cause === "Extreme heat");
+    out.push(el("li", {}, b(byCause[0][0]), ` caused the most lost days (${byCause[0][1]})`,
+      byCause[1] ? `, then ${byCause[1][0].toLowerCase()} (${byCause[1][1]})` : "", ".",
+      heat.length ? ` Extreme heat cost ${plural(heat.length, "day")}, all in ${unique(heat.map((d) => `${MONTH_FULL[+d.slice(5, 7) - 1]} ${d.slice(0, 4)}`)).join(" and ")}, when classes were still in session.` : ""));
 
     const provs = provinceRows(rs).sort((a, c) => c.days - a.days).slice(0, 3);
-    out.push(el("li", {}, "Most affected: ", ...provs.flatMap((p, i) => [i ? (i === provs.length - 1 ? ", and " : ", ") : "", b(p.province), ` (${p.days} days)`]),
-      ". Their counts include days when only some towns suspended."));
+    out.push(el("li", {}, "Hardest hit: ", ...provs.flatMap((p, i) => [i ? (i === provs.length - 1 ? " and " : ", ") : "", b(p.province), ` (${pctText(p.days, total)} of school days)`]), "."));
 
-    const peak = [...countBy(lgu, (r) => +r.date.slice(5, 7))].sort((a, c) => c[1] - a[1]);
-    const jn = lgu.filter((r) => { const m = +r.date.slice(5, 7); return m >= 7 && m <= 11; }).length;
-    out.push(el("li", {}, b(`${pct(jn, lgu.length)}%`), " of LGU suspensions fell between July and November",
-      peak.length ? `; the single busiest month was ${MONTH_FULL[peak[0][0] - 1]}` : "", ". That window overlaps the first half of the school year."));
-
+    const julNov = lgu.filter((r) => { const m = +r.date.slice(5, 7); return m >= 7 && m <= 11; }).length;
     const worst = [...countBy(lgu, (r) => r.month)].sort((a, c) => c[1] - a[1])[0];
-    if (worst && unique(lgu.map((r) => r.month)).length > 1) {
-      const wr = rs.filter((r) => r.month === worst[0]);
-      const wc = [...countBy(unique(wr.map((r) => r.date)), (d) => H.days[d].cause)].sort((a, c) => c[1] - a[1])[0][0];
-      out.push(el("li", {}, "The worst single month was ", b(`${MONTH_FULL[+worst[0].slice(5) - 1]} ${worst[0].slice(0, 4)}`),
-        `: ${fmt(worst[1])} LGU suspensions on ${plural(unique(wr.map((r) => r.date)).length, "school day")}${where()}, mostly from ${wc.toLowerCase()}.`));
+    out.push(el("li", {}, b(pctText(julNov, lgu.length)), " of suspensions fell from July to November, the first months of the school year",
+      worst ? `; the worst month was ${MONTH_FULL[+worst[0].slice(5) - 1]} ${worst[0].slice(0, 4)} (${fmt(worst[1])} LGU suspensions)` : "", "."));
+
+    const events = stormEvents(rs).slice(0, 3);
+    if (events.length) {
+      out.push(el("li", {}, "Biggest storms: ", ...events.flatMap((e, i) => [i ? "; " : "", b(e.storm),
+        ` (${MON[+e.dates[0].slice(5, 7) - 1]} ${e.dates[0].slice(0, 4)}, ${fmt(e.lgu)} LGU suspensions)`]), "."));
     }
 
-    const f2f = lgu.filter((r) => r.inPerson).length;
-    const allLv = lgu.filter((r) => r.mask === 31).length;
-    out.push(el("li", {}, b(`${pct(f2f, lgu.length)}%`), " of suspensions were for face-to-face classes only (learning moved to modular or online); ",
-      b(`${pct(allLv, lgu.length)}%`), " suspended every level from preschool to college."));
-
-    out.push(el("li", { class: "muted" }, "These counts are a lower bound: Rappler's roundups miss many single-town suspensions (see How these numbers are made)."));
+    out.push(el("li", {}, b(pctText(lgu.filter((r) => r.mask === 31).length, lgu.length)), " of suspensions covered every level, preschool to college; ",
+      b(pctText(lgu.filter((r) => r.inPerson).length, lgu.length)), " stopped face-to-face classes only, with learning moved to modular or online."));
     $("#findings").replaceChildren(...out);
   }
 
-  // ── Charts ────────────────────────────────────────────────────────────────
-  const causeColor = (c) => css(`--c${CAUSES.indexOf(c) + 1}`) || css("--c9");
-  function chartDefaults() {
-    Chart.defaults.font.family = css("--font-body");
-    Chart.defaults.color = css("--muted");
-    Chart.defaults.borderColor = css("--line");
-  }
+  // ── Overall: charts ───────────────────────────────────────────────────────
+  const SHORT_CAUSE = { "Typhoon / tropical storm": "Typhoon or storm", "Low pressure area / shear line": "Low pressure" };
+  const groupOf = (cause) => GROUPS.find(([, causes]) => causes.includes(cause)) || GROUPS[3];
+  // Prints each bar's total (vertical stacks) or value (horizontal bars) next to it
+  const valueLabels = {
+    id: "valueLabels",
+    afterDatasetsDraw(chart) {
+      const { ctx, scales: { x, y } } = chart;
+      const horizontal = chart.options.indexAxis === "y";
+      const n = chart.data.labels.length;
+      ctx.save();
+      ctx.font = `600 12px ${css("--font-body")}`;
+      ctx.fillStyle = css("--ink");
+      for (let i = 0; i < n; i++) {
+        const total = chart.data.datasets.reduce((s, ds, k) => s + (chart.isDatasetVisible(k) ? ds.data[i] || 0 : 0), 0);
+        if (!total) continue;
+        if (horizontal) {
+          ctx.textAlign = "left"; ctx.textBaseline = "middle";
+          ctx.fillText(fmt(total), x.getPixelForValue(total) + 6, y.getPixelForValue(i));
+        } else {
+          ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+          ctx.fillText(fmt(total), x.getPixelForValue(i), y.getPixelForValue(total) - 4);
+        }
+      }
+      ctx.restore();
+    },
+  };
   function draw(id, config) {
-    chartDefaults();
+    Chart.defaults.font.family = css("--font-body");
+    Chart.defaults.font.size = 13;
+    Chart.defaults.color = css("--muted");
     if (charts[id]) charts[id].destroy();
-    charts[id] = new Chart(document.getElementById(id), config);
+    config.options.animation = false;  // labels and bars appear together
+    charts[id] = new Chart(document.getElementById(id), { ...config, plugins: [valueLabels] });
   }
 
   function monthsInView() {
-    const [start] = H.covered[0];
-    const end = lastDate();
-    const from = state.year === "all" ? start.slice(0, 7) : `${state.year}-01`;
-    const to = state.year === "all" ? end.slice(0, 7) : (state.year === end.slice(0, 4) ? end.slice(0, 7) : `${state.year}-12`);
+    const [a, b] = periodRange();
     const out = [];
-    let [y, m] = from.split("-").map(Number);
-    while (`${y}-${String(m).padStart(2, "0")}` <= to) {
-      out.push(`${y}-${String(m).padStart(2, "0")}`);
-      m += 1;
-      if (m > 12) { m = 1; y += 1; }
+    for (let m = a.slice(0, 7); m <= b.slice(0, 7);) {
+      out.push(m);
+      const [y, mm] = m.split("-").map(Number);
+      m = mm === 12 ? `${y + 1}-01` : `${y}-${String(mm + 1).padStart(2, "0")}`;
     }
     return out;
   }
@@ -240,180 +321,144 @@
   function renderTimeline(rs) {
     const months = monthsInView();
     const lgu = lguOnly(rs);
-    const used = CAUSES.filter((c) => rs.some((r) => r.cause === c));
-    const value = (month, cause) => (state.metric === "lgu"
-      ? lgu.filter((r) => r.month === month && r.cause === cause).length
-      : unique(rs.filter((r) => r.month === month && r.cause === cause).map((r) => r.date)).length);
+    const value = (month, causes) => (state.metric === "lgu"
+      ? lgu.filter((r) => r.month === month && causes.includes(r.cause)).length
+      : lostDays(rs.filter((r) => r.month === month && causes.includes(r.cause))).length);
     $("#timeline-sub").textContent = state.metric === "lgu"
-      ? `LGU suspensions per month${where()}, coloured by cause.`
-      : `School days per month with at least one suspension${where()}, coloured by cause.`;
+      ? `LGU suspensions each month${where()}, by cause. The number on each bar is the month's total.`
+      : `School days with a suspension somewhere${where()}, each month, by cause. The number on each bar is the month's total.`;
+    const datasets = GROUPS.map(([label, causes, color]) => ({ label, data: months.map((m) => value(m, causes)),
+      backgroundColor: css(color), borderWidth: 0, borderRadius: 3, maxBarThickness: 34 })).filter((ds) => ds.data.some(Boolean));
     draw("c-timeline", {
       type: "bar",
-      data: {
-        labels: months.map((m) => (state.year === "all" ? `${MON[+m.slice(5) - 1]} ${m.slice(2, 4)}` : MON[+m.slice(5) - 1])),
-        datasets: used.map((c) => ({ label: c, data: months.map((m) => value(m, c)), backgroundColor: causeColor(c), borderWidth: 0, borderRadius: 2 })),
-      },
+      data: { labels: months.map((m) => `${MON[+m.slice(5) - 1]} '${m.slice(2, 4)}`), datasets },
       options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { position: "bottom", labels: { boxWidth: 10, boxHeight: 10 } }, tooltip: { mode: "index", filter: (i) => i.raw > 0 } },
-        scales: { x: { stacked: true, grid: { display: false }, ticks: { autoSkip: true, maxRotation: 0 } }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } } },
+        responsive: true, maintainAspectRatio: false, layout: { padding: { top: 22 } },
+        plugins: {
+          legend: { position: "top", align: "start", labels: { boxWidth: 14, boxHeight: 14, padding: 16, color: css("--ink"), font: { size: 13 } } },
+          tooltip: { mode: "index", filter: (i) => i.raw > 0 },
+        },
+        scales: {
+          x: { stacked: true, grid: { display: false }, ticks: { autoSkip: true, autoSkipPadding: 6, maxRotation: 0, minRotation: 0, font: { size: 12 } } },
+          y: { stacked: true, beginAtZero: true, grace: "8%", ticks: { precision: 0 }, grid: { color: css("--line") }, border: { display: false } },
+        },
       },
     });
   }
 
   function renderCauses(rs) {
-    const days = unique(rs.map((r) => r.date));
-    const lgu = lguOnly(rs);
-    const rows = [...countBy(days, (d) => H.days[d].cause)].sort((a, b) => b[1] - a[1]);
+    const lost = lostDays(rs);
+    const rows = [...countBy(lost, (d) => H.days[d].cause)].sort((a, b) => b[1] - a[1]);
     draw("c-cause", {
       type: "bar",
-      data: {
-        labels: rows.map(([c]) => c),
-        datasets: [{ label: "School days", data: rows.map(([, n]) => n), backgroundColor: rows.map(([c]) => causeColor(c)), borderRadius: 3 }],
-      },
+      data: { labels: rows.map(([c]) => SHORT_CAUSE[c] || c), datasets: [{ label: "School days lost", data: rows.map(([, n]) => n),
+        backgroundColor: rows.map(([c]) => css(groupOf(c)[2])), borderRadius: 3, maxBarThickness: 26 }] },
       options: {
-        indexAxis: "y", responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { callbacks: { afterLabel: (i) => `${fmt(lgu.filter((r) => r.cause === rows[i.dataIndex][0]).length)} LGU suspensions` } } },
-        scales: { x: { beginAtZero: true, ticks: { precision: 0 } }, y: { grid: { display: false } } },
+        indexAxis: "y", responsive: true, maintainAspectRatio: false, layout: { padding: { right: 36 } },
+        plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: css("--line") }, border: { display: false } },
+          y: { grid: { display: false }, ticks: { color: css("--ink"), font: { size: 13 } } } },
       },
     });
   }
 
-  function renderSeason() {
-    // Average per calendar month over complete years, for the selected region (the year filter doesn't apply)
-    const base = RECS.filter((r) => FULL_YEARS.includes(r.year) && inRegion(r));
-    const n = FULL_YEARS.length || 1;
-    const avgDays = MON.map((_, i) => unique(base.filter((r) => +r.date.slice(5, 7) === i + 1).map((r) => r.date)).length / n);
-    const avgLgu = MON.map((_, i) => lguOnly(base).filter((r) => +r.date.slice(5, 7) === i + 1).length / n);
+  // ── Breakdown: a city or town ─────────────────────────────────────────────
+  // A record applies to a town if it names it, or covers it (province-wide, except independent
+  // cities outside Metro Manila; region-wide; nationwide)
+  function covers(r, p) {
+    const prov = placeKey(r.province), city = placeKey(r.city === "all cities" ? "" : r.city);
+    if (r.scope === "city") return city === placeKey(p.name) && (prov === placeKey(p.province) || !r.province || uniqueNames.has(placeKey(p.name)));
+    if (r.scope === "province") {
+      if (p.isCity && prov === placeKey(p.name)) return true;
+      return prov === placeKey(p.province) && (!p.independent || p.province === "Metro Manila");
+    }
+    if (r.scope === "region") return r.region === p.region;
+    return r.scope === "national";
+  }
+
+  function renderTown() {
+    const p = state.town;
+    $("#town-clear").hidden = !p;
+    try { const u = new URL(location.href); p ? u.searchParams.set("town", p.label) : u.searchParams.delete("town"); history.replaceState(null, "", u); } catch { /* sandboxed */ }
+    if (!p) { $("#town-result").replaceChildren(); return; }
+    const total = schoolDays();
+    const [a, b] = periodRange();
+    const days = lostDays(RECS.filter((r) => r.date >= a && r.date <= b && covers(r, p))).sort().reverse();
     const today = phToday();
-    const curMonth = +today.slice(5, 7);
-    const ahead = (i) => i + 1 >= curMonth;
-    $("#season-sub").textContent = `Average school days with suspensions per month${where()}, ${FULL_YEARS[0]}–${FULL_YEARS[FULL_YEARS.length - 1]}. Highlighted: the rest of ${today.slice(0, 4)}.`;
-    draw("c-season", {
-      type: "bar",
-      data: { labels: MON, datasets: [{ label: "Average school days", data: avgDays.map((v) => +v.toFixed(1)),
-        backgroundColor: MON.map((_, i) => (ahead(i) ? css("--accent") : css("--accent-soft"))), borderRadius: 3 }] },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { callbacks: { afterLabel: (i) => `${avgLgu[i.dataIndex].toFixed(0)} LGU suspensions on average` } } },
-        scales: { y: { beginAtZero: true }, x: { grid: { display: false } } },
-      },
-    });
-    const rest = MON.map((_, i) => i).filter(ahead);
-    const sumDays = rest.reduce((s, i) => s + avgDays[i], 0);
-    const sumLgu = rest.reduce((s, i) => s + avgLgu[i], 0);
-    const busiest = avgDays.indexOf(Math.max(...avgDays));
-    $("#outlook").replaceChildren(
-      el("b", { text: `${MONTH_FULL[curMonth - 1]} to December: ` }),
-      `in ${FULL_YEARS.join(", ")}, these months averaged about ${Math.round(sumDays)} school days with suspensions and ${fmt(Math.round(sumLgu))} LGU suspensions${where()}. `,
-      `The busiest month on record is ${MONTH_FULL[busiest]} (${avgDays[busiest].toFixed(1)} days a year). This is a historical average, not a forecast.`);
+    const live = LIVE ? (LIVE.records || []).filter((r) => SHOWN.has(r.status) && covers(r, p)) : [];
+    const status = (d) => {
+      const rs = live.filter((r) => r.date === d);
+      const active = rs.find((r) => ACTIVE.has(r.status));
+      if (active) return el("span", { class: "pill on" }, `${active.status === "online_or_modular" ? "Moved online" : "Suspended"}: ${levelsText(maskOf(active.levels))}`);
+      if (rs.some((r) => r.status === "lifted")) return el("span", { class: "pill lifted", text: "Suspension lifted" });
+      return el("span", { class: "pill", text: "No suspension announced" });
+    };
+    $("#town-result").replaceChildren(el("div", { class: "town-card" },
+      el("h3", {}, p.name, el("span", { text: ` ${p.province} · ${p.region}` })),
+      el("div", { class: "town-now" },
+        el("p", {}, el("b", { text: "Today " }), status(today)),
+        el("p", {}, el("b", { text: "Tomorrow " }), status(addDays(today, 1)))),
+      el("p", { class: "town-lost" }, el("b", { text: `${pctText(days.length, total)} of school days lost` }),
+        ` · ${plural(days.length, "school day")} of ${fmt(total)} from ${period()}, counting its own suspensions and province-wide ones` +
+        (p.independent && p.province !== "Metro Manila" ? " (as an independent city, it isn't covered by the province's)" : "") + "."),
+      days.length ? el("div", { class: "chips", role: "list" }, ...days.map((d) => {
+        const c = el("button", { type: "button", class: "chip", role: "listitem", text: dayLabel(d, { month: "short", day: "numeric", year: "numeric" }) });
+        c.addEventListener("click", () => { state.date = d; renderByDate(); $("#t-date").scrollIntoView({ behavior: "smooth", block: "start" }); });
+        return c;
+      })) : null));
   }
 
-  // ── Tables ────────────────────────────────────────────────────────────────
+  // ── Breakdown: where school days are lost ─────────────────────────────────
   function renderProvinces(rs) {
+    const total = schoolDays();
+    $("#prov-sub").textContent = `Share of the ${fmt(total)} school days${where()} from ${period()} on which at least one LGU in the province suspended classes.`;
     const rows = provinceRows(rs);
     const key = state.provSort;
     rows.sort((a, b) => (typeof a[key] === "string" ? a[key].localeCompare(b[key]) * -state.provDir : (a[key] - b[key]) * state.provDir) || b.days - a.days);
-    const max = Math.max(1, ...rows.map((r) => r.days));
-    const cols = [["province", "Province", false], ["days", "School days", true], ["wideDays", "Whole province", true],
-      ["towns", "Cities & towns", true], ["lgu", "LGU suspensions", true], ["cause", "Main cause", false]];
+    const max = Math.max(1, ...rows.map((r) => r.pct));
+    const cols = [["province", "Province", false], ["pct", "% of school days lost", true], ["days", "School days lost", true],
+      ["wideDays", "Whole province", true], ["towns", "Cities & towns", true], ["cause", "Main cause", false]];
     const head = el("tr", {}, el("th", { class: "rank", text: "#" }), ...cols.map(([k, label, num]) => {
-      const th = el("th", { class: num ? "num" : "", text: label, scope: "col", "aria-sort": state.provSort === k ? (state.provDir < 0 ? "descending" : "ascending") : "none" });
-      th.addEventListener("click", () => { state.provDir = state.provSort === k ? -state.provDir : -1; state.provSort = k; renderProvinces(filtered()); });
+      const th = el("th", { class: num ? "num" : "", scope: "col", "aria-sort": state.provSort === k ? (state.provDir < 0 ? "descending" : "ascending") : "none" });
+      const btn = el("button", { type: "button", class: "sort", text: label });
+      btn.addEventListener("click", () => { state.provDir = state.provSort === k ? -state.provDir : -1; state.provSort = k; renderProvinces(filtered()); });
+      th.append(btn);
       return th;
     }));
     const shown = state.provAll ? rows : rows.slice(0, PROV_SHOWN);
     const body = shown.map((r, i) => el("tr", {},
       el("td", { class: "rank", text: String(i + 1) }),
       el("td", {}, r.province, el("span", { class: "sub", text: r.region })),
-      el("td", { class: "num" }, el("span", { class: "bar", style: `width:${Math.round((60 * r.days) / max)}px` }), String(r.days)),
+      el("td", { class: "num pct-cell" }, el("span", { class: "bar", style: `width:${Math.round((80 * r.pct) / max)}px` }), el("b", { text: pctText(r.days, total) })),
+      el("td", { class: "num", text: `${r.days} of ${total}` }),
       el("td", { class: "num", text: String(r.wideDays) }),
       el("td", { class: "num", text: String(r.towns) }),
-      el("td", { class: "num", text: fmt(r.lgu) }),
-      el("td", {}, el("span", { class: "cause-dot", style: `background:${causeColor(r.cause)}` }), r.cause)));
+      el("td", {}, el("span", { class: "cause-dot", style: `background:${css(groupOf(r.cause)[2])}` }), r.cause)));
     $("#t-prov").replaceChildren(el("thead", {}, head), el("tbody", {}, ...body));
     $("#prov-more").hidden = rows.length <= PROV_SHOWN;
     $("#prov-more").textContent = state.provAll ? "Show top 15" : `Show all ${rows.length} provinces`;
   }
 
-  function renderEvents(rs) {
-    const days = unique(rs.map((r) => r.date)).sort();
-    const events = [];
-    days.forEach((d) => {
-      const info = H.days[d];
-      const storm = info.storms[0];
-      const prev = events[events.length - 1];
-      const near = prev && (new Date(d) - new Date(prev.dates[prev.dates.length - 1])) / 864e5 <= 4;
-      if (prev && near && (storm ? prev.storm === storm : !prev.storm && prev.cause === info.cause)) prev.dates.push(d);
-      else if (storm && events.some((e) => e.storm === storm && (new Date(d) - new Date(e.dates[e.dates.length - 1])) / 864e5 <= 7)) events.find((e) => e.storm === storm).dates.push(d);
-      else events.push({ storm, cause: info.cause, dates: [d] });
-    });
-    events.forEach((e) => {
-      const set = new Set(e.dates);
-      const recs = rs.filter((r) => set.has(r.date));
-      e.lgu = lguOnly(recs).length;
-      e.provinces = unique(recs.map((r) => r.province).filter(Boolean)).length;
-    });
-    const top = events.sort((a, b) => b.lgu - a.lgu).slice(0, 10);
-    const span = (ds) => {
-      const a = ds[0], z = ds[ds.length - 1];
-      const md = (d) => `${MON[+d.slice(5, 7) - 1]} ${+d.slice(8, 10)}`;
-      if (a === z) return `${md(a)}, ${a.slice(0, 4)}`;
-      if (a.slice(0, 7) === z.slice(0, 7)) return `${md(a)}–${+z.slice(8, 10)}, ${z.slice(0, 4)}`;
-      return `${md(a)} – ${md(z)}, ${z.slice(0, 4)}`;
-    };
-    $("#t-events").replaceChildren(
-      el("thead", {}, el("tr", {}, el("th", { text: "Event" }), el("th", { class: "num", text: "School days" }), el("th", { class: "num", text: "LGU suspensions" }), el("th", { class: "num", text: "Provinces" }))),
-      el("tbody", {}, ...top.map((e) => el("tr", {},
-        el("td", {}, el("span", { class: "cause-dot", style: `background:${causeColor(e.cause)}` }), e.storm || (e.cause === "Typhoon / tropical storm" ? "Storm (name not given)" : e.cause),
-          el("span", { class: "sub", text: `${span(e.dates)}${e.storm ? ` · ${e.cause.toLowerCase()}` : ""}` })),
-        el("td", { class: "num", text: String(e.dates.length) }),
-        el("td", { class: "num", text: fmt(e.lgu) }),
-        el("td", { class: "num", text: String(e.provinces) })))));
-  }
-
-  function renderLevels(rs) {
-    const lgu = lguOnly(rs);
-    const n = lgu.length;
-    const rows = [
-      ["Every level, preschool to college", lgu.filter((r) => r.mask === 31).length, "The whole school system closed for the day."],
-      ["Basic education only (preschool to senior high)", lgu.filter((r) => r.mask === 15).length, "Colleges and universities decided on their own."],
-      ["Some levels only", lgu.filter((r) => r.mask > 0 && r.mask !== 31 && r.mask !== 15).length, "Usually the youngest learners first, e.g. preschool to elementary."],
-      ["Face-to-face classes only", lgu.filter((r) => r.inPerson).length, "Learning moved to modular or online instead of stopping."],
-      ["Public schools only", lgu.filter((r) => r.sector === "public").length, "Private schools were left to decide."],
-      ["Part of the day", lgu.filter((r) => r.partDay).length, "For example, classes suspended from 1 PM."],
-      ["Levels not stated", lgu.filter((r) => r.mask < 0).length, "The announcement didn't say which levels."],
-    ];
-    $("#levels").replaceChildren(...rows.map(([label, k, note]) => el("div", { class: "bar-row" },
-      el("p", {}, el("span", { text: label }), el("span", { text: `${pct(k, n)}% · ${fmt(k)}` })),
-      el("div", { class: "track" }, el("i", { style: `width:${n ? (100 * k) / n : 0}%` })),
-      el("small", { text: note }))));
-  }
-
-  // ── Per-date breakdown: province, city, levels suspended, confidence ──────
-  const LEVEL_KEYS = ["preschool", "elementary", "junior_high", "senior_high", "college"];
-  const SHOWN = new Set([...ACTIVE, "lifted"]);
+  // ── Breakdown: every place, by date ───────────────────────────────────────
   const maskOf = (levels) => (levels ? LEVEL_KEYS.reduce((m, k, i) => m | (levels[k] ? 1 << i : 0), 0) : -1);
-
   function levelsText(mask) {
     if (mask < 0 || mask === 0) return "Not stated";
     if (mask === 31) return "All levels";
-    const on = LEVEL_LABELS.filter((_, i) => mask & (1 << i));
     const idx = LEVEL_LABELS.map((_, i) => i).filter((i) => mask & (1 << i));
-    const contiguous = idx[idx.length - 1] - idx[0] === idx.length - 1;
-    if (on.length === 1) return `${on[0]} only`;
-    return contiguous ? `${on[0]} to ${on[on.length - 1]}` : on.join(", ");
+    if (idx.length === 1) return `${LEVEL_LABELS[idx[0]]} only`;
+    return idx[idx.length - 1] - idx[0] === idx.length - 1 ? `${LEVEL_LABELS[idx[0]]} to ${LEVEL_LABELS[idx[idx.length - 1]]}`
+      : idx.map((i) => LEVEL_LABELS[i]).join(", ");
   }
   const SECTOR_TEXT = { public: "public schools only", private: "private schools only" };
 
-  // One row per place, from the live check (upcoming) or the past data (Rappler roundups)
   function liveRow(r) {
     const notes = [];
     if (r.status === "online_or_modular") notes.push("moved online / modular");
     if (r.status === "opening_postponed") notes.push("school opening postponed");
     if (r.status === "lifted") notes.push("suspension lifted");
     if ((r.notes || []).includes("In-person only")) notes.push("face-to-face classes only");
-    if ((r.notes || []).some((n) => n.startsWith("From"))) notes.push(r.notes.find((n) => n.startsWith("From")).toLowerCase());
+    const from = (r.notes || []).find((n) => n.startsWith("From"));
+    if (from) notes.push(from.toLowerCase());
     const sector = { "Public only": "public", "Private only": "private" }[r.sector];
     if (sector) notes.push(SECTOR_TEXT[sector]);
     return { date: r.date, region: r.region || "", province: r.province || "", city: r.city, scope: r.scope,
@@ -425,7 +470,6 @@
     if (r.inPerson) notes.push("face-to-face classes only");
     if (r.partDay) notes.push("part of the day");
     if (SECTOR_TEXT[r.sector]) notes.push(SECTOR_TEXT[r.sector]);
-    // Same rule as the live checker: one outlet = 3, one point less per missing detail
     let conf = 3; const why = ["1 outlet (Rappler)"];
     if (r.mask < 0) { conf -= 1; why.push("levels not stated"); }
     if (!r.sector) { conf -= 1; why.push("public/private not stated"); }
@@ -434,17 +478,12 @@
       mask: r.mask, notes, lifted: false, conf: Math.max(1, conf), why: why.join("; "),
       url: H.days[r.date].url, outlets: ["Rappler"] };
   }
-
-  function liveRows() {
-    return LIVE ? (LIVE.records || []).filter((r) => SHOWN.has(r.status)).map(liveRow) : [];
-  }
+  const liveRows = () => (LIVE ? (LIVE.records || []).filter((r) => SHOWN.has(r.status)).map(liveRow) : []);
   function rowsFor(d) {
     const live = liveRows().filter((r) => r.date === d);
-    // The live check covers yesterday to 3 days ahead; earlier dates come from the past data
     const rows = live.length || (LIVE && d >= addDays(LIVE.today, -1)) ? live : filtered().filter((r) => r.date === d).map(pastRow);
     return rows.filter(inRegion);
   }
-
   function dateOptions() {
     const today = phToday();
     const upcoming = unique([today, addDays(today, 1), ...liveRows().filter(inRegion).map((r) => r.date).filter((d) => d >= today)]).sort();
@@ -452,14 +491,11 @@
     return { upcoming, past };
   }
 
-  function defaultDate({ upcoming, past }) {
-    return upcoming.find((d) => rowsFor(d).length) || past[0] || upcoming[0];
-  }
-
   function renderByDate() {
     const opts = dateOptions();
-    const all = [...opts.upcoming, ...opts.past];
-    if (!state.date || !all.includes(state.date)) state.date = defaultDate(opts);
+    if (!state.date || ![...opts.upcoming, ...opts.past].includes(state.date)) {
+      state.date = opts.upcoming.find((d) => rowsFor(d).length) || opts.past[0] || opts.upcoming[0];
+    }
     const today = phToday();
     const label = (d) => {
       const n = rowsFor(d).length;
@@ -473,7 +509,7 @@
       ...[...byMonth].map(([m, ds]) => el("optgroup", { label: `${MONTH_FULL[+m.slice(5) - 1]} ${m.slice(0, 4)}` },
         ...ds.map((d) => el("option", { value: d, text: label(d) })))));
     $("#f-date").value = state.date;
-    try { history.replaceState(null, "", `?date=${state.date}${location.hash}`); } catch { /* file:// or sandboxed */ }
+    try { const u = new URL(location.href); u.searchParams.set("date", state.date); history.replaceState(null, "", u); } catch { /* sandboxed */ }
     renderNowBoxes(opts.upcoming.slice(0, 2));
     renderDateTable();
   }
@@ -499,10 +535,7 @@
     if (r.scope === "schools" || !r.city) return r.city ? `Some schools: ${r.city}` : "Some schools";
     return r.city;
   }
-
-  function pips(n) {
-    return el("span", { class: "pips", "aria-hidden": "true" }, ...[1, 2, 3, 4, 5].map((i) => el("i", { class: i <= n ? "f" : "" })));
-  }
+  const pips = (n) => el("span", { class: "pips", "aria-hidden": "true" }, ...[1, 2, 3, 4, 5].map((i) => el("i", { class: i <= n ? "f" : "" })));
 
   function renderDateTable() {
     const d = state.date;
@@ -517,9 +550,10 @@
       || (regionRank(groups.get(a)[0].region) - regionRank(groups.get(b)[0].region)) || a.localeCompare(b));
     const rank = (r) => ({ national: 0, region: 1, province: 2, city: 3, schools: 4 }[r.scope] ?? 5);
     const fromLive = rows.length && LIVE && d >= addDays(LIVE.today, -1);
+    const long = dayLabel(d, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
     $("#date-sum").textContent = rows.length
-      ? `${dayLabel(d, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}: ${plural(rows.length, "place")} in ${plural(groups.size, "province")}${where()}. ${fromLive ? "From the live check." : "From Rappler's roundup."}`
-      : `${dayLabel(d, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}: no suspensions${where()} ${d >= phToday() ? "announced so far" : "recorded"}.`;
+      ? `${long}: ${plural(rows.length, "place")} in ${plural(groups.size, "province")}${where()}. ${fromLive ? "From the live check." : "From Rappler's roundup."}${isSchoolDay(d) ? "" : " Not a school day."}`
+      : `${long}: no suspensions${where()} ${d >= phToday() ? "announced so far" : "recorded"}.`;
     $("#dl-date").hidden = !rows.length;
     const head = el("thead", {}, el("tr", {},
       el("th", { scope: "col", text: "Province" }), el("th", { scope: "col", text: "City / town" }),
@@ -550,10 +584,10 @@
     $("#t-date").replaceChildren(head, el("tbody", {}, ...body));
   }
 
-  // Header line and warnings for the live check; then the breakdown
-  function renderNow() {
+  // The live check's status line, then the date table (also redrawn when new results arrive)
+  function renderBreakdownLive() {
     if (!LIVE) {
-      $("#now-checked").textContent = "The live checker's results couldn't be loaded; past dates are still shown.";
+      $("#now-checked").textContent = "The live check couldn't be loaded; past dates are still shown.";
     } else {
       const age = Date.now() - new Date(LIVE.checked_at).getTime();
       $("#now-checked").textContent = `Coming days from the news, checked ${timeText(LIVE.checked_at)}. Checked every day at 5 AM; press Check now for the latest.`;
@@ -564,6 +598,7 @@
       $("#now-banner").textContent = issues.join(" ");
     }
     renderByDate();
+    if (state.town) renderTown();
   }
 
   // ── Check now: start a news check and wait for it ─────────────────────────
@@ -576,20 +611,18 @@
   };
   const callRefresh = (method) => fetch("api/refresh", { method, cache: "no-store" })
     .then((r) => r.json().catch(() => ({ state: "error", message: `The check service answered ${r.status}.` })));
-
   function waitForCheck() {
     checkStatus("Checking the news now. This takes about 3 to 5 minutes; you can keep reading.", true);
     const timer = setInterval(() => {
       callRefresh("GET").then((s) => {
         if (s.state === "running") return;
         clearInterval(timer);
-        loadLive().then((l) => { LIVE = l; renderNow(); }).catch(() => {});
+        loadLive().then((l) => { LIVE = l; renderBreakdownLive(); }).catch(() => {});
         checkStatus(s.last_ok === false ? "The check didn't finish properly. The results shown are from the last good check."
           : "Done: showing the latest results.", false);
       }).catch(() => {});
     }, 20000);
   }
-
   checkBtn.addEventListener("click", () => {
     checkStatus("Starting a check…", true);
     callRefresh("POST").then((s) => {
@@ -597,7 +630,6 @@
       else checkStatus(s.message || "Couldn't start a check.", false);
     }).catch(() => checkStatus("Couldn't reach the check service. Try again in a minute.", false));
   });
-  // A check someone else started is still running: show it and wait for it
   callRefresh("GET").then((s) => { if (s.state === "running") waitForCheck(); }).catch(() => {});
 
   // ── CSV ───────────────────────────────────────────────────────────────────
