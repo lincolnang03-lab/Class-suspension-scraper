@@ -6,9 +6,6 @@
 <meta name="color-scheme" content="light">
 <title>Lost School Days</title>
 <meta name="description" content="Class suspensions in the Philippines since 2025: how many school days are lost, where and why, and what is announced for today and tomorrow.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="exec.css">
 <script>
   // Where the scheduled checker publishes upcoming suspensions. Empty = data.json next to this page.
@@ -19,9 +16,9 @@
 <div class="page">
 
   <header class="top">
-    <p class="kicker">Philippines · basic and higher education</p>
+    <p class="kicker">Philippines · class suspensions</p>
     <h1>Lost School Days</h1>
-    <p class="lede" id="lede">Every class suspension announced by a city, town, province or Malacañang since January 2025, measured against the school days in the calendar.</p>
+    <p class="lede" id="lede">Every class suspension announced by a city, town, province or Malacañang since January 2025, measured against the school calendar.</p>
   </header>
 
   <!-- ═══ Overall ═══ -->
@@ -61,28 +58,19 @@
   <section class="card" aria-labelledby="town-title">
     <div class="card-head">
       <h2 id="town-title">Check a city or town</h2>
-      <p class="muted" id="town-help">Type a city or town to see whether its classes are suspended today or tomorrow, and how many school days it has lost.</p>
+      <p class="muted" id="town-help">See whether classes are suspended today or tomorrow, and every school day a place has lost.</p>
     </div>
-    <div class="town-search">
+    <div class="search" id="town-box">
+      <svg class="search-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.75" fill="none" stroke="currentColor" stroke-width="2"/><path d="M13 13l4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       <label for="town" class="visually-hidden">City or town</label>
-      <input id="town" type="search" list="town-list" autocomplete="off" spellcheck="false"
-             placeholder="Start typing, e.g. Marikina or Malolos" aria-describedby="town-help">
-      <datalist id="town-list"></datalist>
-      <button type="button" class="btn" id="town-clear" hidden>Clear</button>
+      <input id="town" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="town-options"
+             aria-describedby="town-help" autocomplete="off" spellcheck="false" placeholder="Search cities and towns">
+      <button type="button" class="search-clear" id="town-clear" aria-label="Clear search" hidden>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9"/><path d="M7 7l6 6M13 7l-6 6" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+      <ul class="search-results" id="town-options" role="listbox" aria-label="Matching cities and towns" hidden></ul>
     </div>
     <div id="town-result" aria-live="polite"></div>
-  </section>
-
-  <section class="card" aria-labelledby="prov-title">
-    <div class="card-head row">
-      <div>
-        <h2 id="prov-title">Where school days are lost</h2>
-        <p class="muted" id="prov-sub"></p>
-      </div>
-      <button type="button" class="btn" id="dl-prov">Download CSV</button>
-    </div>
-    <div class="table-wrap"><table class="tbl" id="t-prov"></table></div>
-    <button type="button" class="more" id="prov-more" hidden></button>
   </section>
 
   <section class="card bydate" aria-labelledby="bydate-title">

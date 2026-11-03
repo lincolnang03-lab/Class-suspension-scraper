@@ -12,7 +12,6 @@
   const LEVEL_KEYS = ["preschool", "elementary", "junior_high", "senior_high", "college"];
   const ACTIVE = new Set(["suspended", "online_or_modular", "opening_postponed"]);
   const SHOWN = new Set([...ACTIVE, "lifted"]);
-  const PROV_SHOWN = 15;
   // Causes, grouped so the month-by-month chart has four clear colours
   const GROUPS = [
     ["Typhoons and storms", ["Typhoon / tropical storm"], "--g1"],
@@ -56,7 +55,7 @@
   };
 
   const params = new URLSearchParams(location.search);
-  const state = { year: "all", region: "", metric: "days", provSort: "pct", provDir: -1, provAll: false, date: "", town: null };
+  const state = { year: "all", region: "", metric: "days", date: "", town: null, townAll: false };
   let H = null, LIVE = null, RECS = [], YEARS = [], PLACES = [], uniqueNames = new Set();
   let HOLIDAYS = new Set(), BREAKS = [];
   const charts = {};
@@ -149,23 +148,8 @@
       (v) => { state.metric = v; drawMetric(); renderTimeline(filtered()); });
     drawMetric();
 
-    $("#town-list").replaceChildren(...PLACES.map((p) => el("option", { value: p.label })));
-    const pickTown = () => {
-      const v = $("#town").value.trim().toLowerCase();
-      const found = PLACES.find((p) => p.label.toLowerCase() === v);
-      if (found || !v) { state.town = found || null; renderTown(); }
-    };
-    $("#town").addEventListener("change", pickTown);
-    $("#town").addEventListener("input", () => { if (PLACES.some((p) => p.label === $("#town").value)) pickTown(); });
-    $("#town-clear").addEventListener("click", () => { $("#town").value = ""; state.town = null; renderTown(); $("#town").focus(); });
-    if (state.town) $("#town").value = state.town.label;
-
-    $("#prov-more").addEventListener("click", () => { state.provAll = !state.provAll; renderProvinces(filtered()); });
+    bindSearch();
     $("#f-date").addEventListener("change", (e) => { state.date = e.target.value; renderByDate(); });
-    $("#dl-prov").addEventListener("click", () => downloadCsv("school_days_lost_by_province", provinceRows(filtered()).map((p) => ({
-      province: p.province, region: p.region, school_days_lost: p.days, school_days_in_period: schoolDays(),
-      percent_of_school_days: pct(p.days, schoolDays()).toFixed(1), whole_province_days: p.wideDays,
-      cities_and_towns_affected: p.towns, main_cause: p.cause }))));
     $("#dl-date").addEventListener("click", () => downloadCsv(`class_suspensions_${state.date}`, rowsFor(state.date).map((r) => ({
       date: r.date, region: r.region, province: r.province, city_or_town: placeName(r), levels_suspended: levelsText(r.mask),
       details: r.notes.join("; "), confidence: r.conf, confidence_reason: r.why, outlets: r.outlets.join("; "), source: r.url || "" }))));
@@ -183,7 +167,6 @@
     renderTimeline(rs);
     renderCauses(rs);
     renderTown();
-    renderProvinces(rs);
     renderBreakdownLive();
     $("#cal-count").textContent = `${fmt(schoolDays())} school days from ${period()}`;
     $("#footer").textContent = `Past data: ${fmt(RECS.length)} records on ${unique(RECS.map((r) => r.date)).length} days, to ${dayLabel(lastDate(), { month: "long", day: "numeric", year: "numeric" })}. Source: ${H.source}; coming days from the live news check.`;
@@ -339,7 +322,7 @@
           tooltip: { mode: "index", filter: (i) => i.raw > 0 },
         },
         scales: {
-          x: { stacked: true, grid: { display: false }, ticks: { autoSkip: true, autoSkipPadding: 6, maxRotation: 0, minRotation: 0, font: { size: 12 } } },
+          x: { stacked: true, grid: { display: false }, ticks: { autoSkip: window.innerWidth < 760, autoSkipPadding: 6, maxRotation: 0, minRotation: 0, font: { size: 12 } } },
           y: { stacked: true, beginAtZero: true, grace: "8%", ticks: { precision: 0 }, grid: { color: css("--line") }, border: { display: false } },
         },
       },
@@ -376,67 +359,103 @@
     return r.scope === "national";
   }
 
-  function renderTown() {
-    const p = state.town;
-    $("#town-clear").hidden = !p;
-    try { const u = new URL(location.href); p ? u.searchParams.set("town", p.label) : u.searchParams.delete("town"); history.replaceState(null, "", u); } catch { /* sandboxed */ }
-    if (!p) { $("#town-result").replaceChildren(); return; }
-    const total = schoolDays();
-    const [a, b] = periodRange();
-    const days = lostDays(RECS.filter((r) => r.date >= a && r.date <= b && covers(r, p))).sort().reverse();
-    const today = phToday();
-    const live = LIVE ? (LIVE.records || []).filter((r) => SHOWN.has(r.status) && covers(r, p)) : [];
-    const status = (d) => {
-      const rs = live.filter((r) => r.date === d);
-      const active = rs.find((r) => ACTIVE.has(r.status));
-      if (active) return el("span", { class: "pill on" }, `${active.status === "online_or_modular" ? "Moved online" : "Suspended"}: ${levelsText(maskOf(active.levels))}`);
-      if (rs.some((r) => r.status === "lifted")) return el("span", { class: "pill lifted", text: "Suspension lifted" });
-      return el("span", { class: "pill", text: "No suspension announced" });
+  // Search: a combobox with a custom results list (keyboard: ↑ ↓ Enter Esc)
+  const norm = (s) => s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  let matches = [], active = -1;
+  function bindSearch() {
+    const input = $("#town"), list = $("#town-options");
+    const open = (on) => { list.hidden = !on; input.setAttribute("aria-expanded", String(on)); if (!on) input.removeAttribute("aria-activedescendant"); };
+    const choose = (p) => { state.town = p; state.townAll = false; input.value = p.label; open(false); renderTown(); };
+    const paint = () => {
+      list.replaceChildren(...(matches.length ? matches.map((p, i) => {
+        const q = norm(input.value.trim()), nm = norm(p.name), at = nm.indexOf(q);
+        const name = at < 0 ? [p.name] : [p.name.slice(0, at), el("mark", { text: p.name.slice(at, at + q.length) }), p.name.slice(at + q.length)];
+        const li = el("li", { role: "option", id: `town-opt-${i}`, "aria-selected": String(i === active) },
+          el("span", { class: "nm" }, ...name), el("span", { class: "pl", text: `${p.province} · ${p.region}` }));
+        li.addEventListener("pointerdown", (e) => { e.preventDefault(); choose(p); });  // respond on press
+        return li;
+      }) : [el("li", { class: "none", role: "option", "aria-disabled": "true", text: "No city or town by that name" })]));
+      if (active >= 0) { input.setAttribute("aria-activedescendant", `town-opt-${active}`); $(`#town-opt-${active}`)?.scrollIntoView({ block: "nearest" }); }
     };
-    $("#town-result").replaceChildren(el("div", { class: "town-card" },
-      el("h3", {}, p.name, el("span", { text: ` ${p.province} · ${p.region}` })),
-      el("div", { class: "town-now" },
-        el("p", {}, el("b", { text: "Today " }), status(today)),
-        el("p", {}, el("b", { text: "Tomorrow " }), status(addDays(today, 1)))),
-      el("p", { class: "town-lost" }, el("b", { text: `${pctText(days.length, total)} of school days lost` }),
-        ` · ${plural(days.length, "school day")} of ${fmt(total)} from ${period()}, counting its own suspensions and province-wide ones` +
-        (p.independent && p.province !== "Metro Manila" ? " (as an independent city, it isn't covered by the province's)" : "") + "."),
-      days.length ? el("div", { class: "chips", role: "list" }, ...days.map((d) => {
-        const c = el("button", { type: "button", class: "chip", role: "listitem", text: dayLabel(d, { month: "short", day: "numeric", year: "numeric" }) });
-        c.addEventListener("click", () => { state.date = d; renderByDate(); $("#t-date").scrollIntoView({ behavior: "smooth", block: "start" }); });
-        return c;
-      })) : null));
+    input.addEventListener("input", () => {
+      const q = norm(input.value.trim());
+      $("#town-clear").hidden = !input.value;
+      if (q.length < 2) { matches = []; open(false); return; }
+      // Names that start with the text first, then names that contain it
+      const starts = [], has = [];
+      PLACES.forEach((p) => { const n = norm(p.name); if (n.startsWith(q)) starts.push(p); else if (n.includes(q) || norm(p.province).startsWith(q)) has.push(p); });
+      matches = [...starts, ...has].slice(0, 8);
+      active = matches.length ? 0 : -1;
+      paint();
+      open(true);
+    });
+    input.addEventListener("keydown", (e) => {
+      if (list.hidden || !matches.length) { if (e.key === "Escape") open(false); return; }
+      if (e.key === "ArrowDown") { e.preventDefault(); active = (active + 1) % matches.length; paint(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); active = (active - 1 + matches.length) % matches.length; paint(); }
+      else if (e.key === "Enter") { e.preventDefault(); if (active >= 0) choose(matches[active]); }
+      else if (e.key === "Escape") open(false);
+    });
+    input.addEventListener("blur", () => open(false));
+    $("#town-clear").addEventListener("click", () => { input.value = ""; state.town = null; $("#town-clear").hidden = true; renderTown(); input.focus(); });
+    if (state.town) { input.value = state.town.label; $("#town-clear").hidden = false; }
   }
 
-  // ── Breakdown: where school days are lost ─────────────────────────────────
-  function renderProvinces(rs) {
+  // A town: today, tomorrow, share of school days lost, then every suspension by month
+  const chevron = () => { const s = document.createElementNS("http://www.w3.org/2000/svg", "svg"); s.setAttribute("class", "chev"); s.setAttribute("viewBox", "0 0 8 13"); s.setAttribute("aria-hidden", "true"); s.innerHTML = '<path d="M1.5 1.5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'; return s; };
+  function renderTown() {
+    const p = state.town;
+    try { const u = new URL(location.href); p ? u.searchParams.set("town", p.label) : u.searchParams.delete("town"); history.replaceState(null, "", u); } catch { /* sandboxed */ }
+    if (!p) { $("#town-result").replaceChildren(); state.townAll = false; return; }
     const total = schoolDays();
-    $("#prov-sub").textContent = `Share of the ${fmt(total)} school days${where()} from ${period()} on which at least one LGU in the province suspended classes.`;
-    const rows = provinceRows(rs);
-    const key = state.provSort;
-    rows.sort((a, b) => (typeof a[key] === "string" ? a[key].localeCompare(b[key]) * -state.provDir : (a[key] - b[key]) * state.provDir) || b.days - a.days);
-    const max = Math.max(1, ...rows.map((r) => r.pct));
-    const cols = [["province", "Province", false], ["pct", "% of school days lost", true], ["days", "School days lost", true],
-      ["wideDays", "Whole province", true], ["towns", "Cities & towns", true], ["cause", "Main cause", false]];
-    const head = el("tr", {}, el("th", { class: "rank", text: "#" }), ...cols.map(([k, label, num]) => {
-      const th = el("th", { class: num ? "num" : "", scope: "col", "aria-sort": state.provSort === k ? (state.provDir < 0 ? "descending" : "ascending") : "none" });
-      const btn = el("button", { type: "button", class: "sort", text: label });
-      btn.addEventListener("click", () => { state.provDir = state.provSort === k ? -state.provDir : -1; state.provSort = k; renderProvinces(filtered()); });
-      th.append(btn);
-      return th;
-    }));
-    const shown = state.provAll ? rows : rows.slice(0, PROV_SHOWN);
-    const body = shown.map((r, i) => el("tr", {},
-      el("td", { class: "rank", text: String(i + 1) }),
-      el("td", {}, r.province, el("span", { class: "sub", text: r.region })),
-      el("td", { class: "num pct-cell" }, el("span", { class: "bar", style: `width:${Math.round((80 * r.pct) / max)}px` }), el("b", { text: pctText(r.days, total) })),
-      el("td", { class: "num", text: `${r.days} of ${total}` }),
-      el("td", { class: "num", text: String(r.wideDays) }),
-      el("td", { class: "num", text: String(r.towns) }),
-      el("td", {}, el("span", { class: "cause-dot", style: `background:${css(groupOf(r.cause)[2])}` }), r.cause)));
-    $("#t-prov").replaceChildren(el("thead", {}, head), el("tbody", {}, ...body));
-    $("#prov-more").hidden = rows.length <= PROV_SHOWN;
-    $("#prov-more").textContent = state.provAll ? "Show top 15" : `Show all ${rows.length} provinces`;
+    const [a, b] = periodRange();
+    const hits = RECS.filter((r) => r.date >= a && r.date <= b && covers(r, p));
+    const lost = lostDays(hits);
+    // One row per date; the town's own announcement wins over a province-wide one
+    const byDate = new Map();
+    hits.forEach((r) => { const cur = byDate.get(r.date); if (!cur || (cur.scope !== "city" && r.scope === "city")) byDate.set(r.date, r); });
+    const allDates = [...byDate.keys()].sort().reverse();
+    const TOWN_SHOWN = 8;
+    const dates = state.townAll ? allDates : allDates.slice(0, TOWN_SHOWN);
+    const today = phToday();
+    const live = LIVE ? (LIVE.records || []).filter((r) => SHOWN.has(r.status) && covers(r, p)) : [];
+    const dayTile = (d, word) => {
+      const rs = live.filter((r) => r.date === d);
+      const act = rs.find((r) => ACTIVE.has(r.status));
+      const text = act ? `${act.status === "online_or_modular" ? "Moved online" : "Suspended"}: ${levelsText(maskOf(act.levels))}`
+        : rs.some((r) => r.status === "lifted") ? "Suspension lifted" : "No suspension announced";
+      return el("div", { class: `tile${act ? " on" : ""}` }, el("p", { class: "k", text: `${word} · ${dayLabel(d, { weekday: "short", month: "short", day: "numeric" })}` }),
+        el("p", { class: "v" }, el("span", { class: "dot", "aria-hidden": "true" }), text));
+    };
+    const months = new Map();
+    dates.forEach((d) => { const m = d.slice(0, 7); if (!months.has(m)) months.set(m, []); months.get(m).push(d); });
+    const row = (d) => {
+      const r = byDate.get(d);
+      const cause = H.days[d].cause;
+      const details = [r.scope === "province" ? "province-wide" : "", r.inPerson ? "face-to-face only" : "", isSchoolDay(d) ? "" : "not a school day"].filter(Boolean);
+      const btn = el("button", { type: "button", class: "row", "aria-label": `${dayLabel(d, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}: open every place suspended that day` },
+        el("span", { class: "d", text: dayLabel(d, { weekday: "short", month: "short", day: "numeric" }) }),
+        el("span", { class: "what" }, levelsText(r.mask), details.length ? el("small", { text: details.join(" · ") }) : null),
+        el("span", { class: "tag", style: `--c: ${css(groupOf(cause)[2])}`, text: SHORT_CAUSE[cause] || cause }),
+        chevron());
+      btn.addEventListener("click", () => { state.date = d; renderByDate(); $("#bydate-title").scrollIntoView({ behavior: "smooth", block: "start" }); });
+      return el("li", {}, btn);
+    };
+    $("#town-result").replaceChildren(el("div", { class: "town" },
+      el("div", { class: "town-head" }, el("h3", { text: p.name }), el("p", { text: `${p.province} · ${p.region}${p.independent && p.province !== "Metro Manila" ? " · independent city" : ""}` })),
+      el("div", { class: "town-tiles" },
+        dayTile(today, "Today"), dayTile(addDays(today, 1), "Tomorrow"),
+        el("div", { class: "tile" }, el("p", { class: "k", text: "School days lost" }), el("p", { class: "v big", text: pctText(lost.length, total) }),
+          el("p", { class: "s", text: `${lost.length} of ${fmt(total)} school days, ${state.year === "all" ? "since Jan 2025" : yearLabel(state.year)}` }))),
+      dates.length
+        ? el("div", {}, el("p", { class: "list-title", text: `${plural(allDates.length, "class suspension")}${allDates.length > dates.length ? ` · latest ${dates.length}` : ""}` }),
+          ...[...months].flatMap(([m, ds]) => [el("p", { class: "group-label", text: `${MONTH_FULL[+m.slice(5) - 1]} ${m.slice(0, 4)}` }), el("ul", { class: "list" }, ...ds.map(row))]),
+          allDates.length > TOWN_SHOWN ? (() => {
+            const more = el("button", { type: "button", class: "btn more-btn", text: state.townAll ? "Show fewer" : `Show all ${allDates.length}` });
+            more.addEventListener("click", () => { state.townAll = !state.townAll; renderTown(); });
+            return more;
+          })() : null)
+        : el("p", { class: "muted", text: `No class suspensions recorded for ${p.name} in this period.` })));
   }
 
   // ── Breakdown: every place, by date ───────────────────────────────────────
