@@ -80,12 +80,13 @@
       HOLIDAYS = new Set((h.calendar?.holidays || []).map(([d]) => d));
       BREAKS = (h.calendar?.breaks || []).map(([a, b]) => [a, b]);
       PLACES = places.places.map(([region, province, name, isCity, independent]) =>
-        ({ region, province, name, isCity: !!isCity, independent: !!independent, label: `${name}, ${province}` }));
+        ({ region, province, name, isCity: !!isCity, independent: !!independent, label: `${name}, ${province}, ${region}`, short: `${name}, ${province}` }));
       const counts = countBy(PLACES, (p) => placeKey(p.name));
       uniqueNames = new Set([...counts].filter(([, n]) => n === 1).map(([k]) => k));
       const wantDate = params.get("date");
       if (/^\d{4}-\d{2}-\d{2}$/.test(wantDate || "")) state.date = wantDate;
-      state.town = PLACES.find((p) => p.label.toLowerCase() === (params.get("town") || "").toLowerCase()) || null;
+      const wantTown = (params.get("town") || "").toLowerCase();  // full label, or the older "Town, Province" links
+      state.town = PLACES.find((p) => p.label.toLowerCase() === wantTown || p.short.toLowerCase() === wantTown) || null;
       buildControls();
       render();
       setInterval(() => loadLive().then((l) => { LIVE = l; renderBreakdownLive(); }).catch(() => {}), 5 * 60 * 1000);
@@ -371,7 +372,7 @@
         const q = norm(input.value.trim()), nm = norm(p.name), at = nm.indexOf(q);
         const name = at < 0 ? [p.name] : [p.name.slice(0, at), el("mark", { text: p.name.slice(at, at + q.length) }), p.name.slice(at + q.length)];
         const li = el("li", { role: "option", id: `town-opt-${i}`, "aria-selected": String(i === active) },
-          el("span", { class: "nm" }, ...name), el("span", { class: "pl", text: `${p.province} · ${p.region}` }));
+          el("span", { class: "nm" }, ...name), el("span", { class: "pl", text: `, ${p.province}, ${p.region}` }));
         li.addEventListener("pointerdown", (e) => { e.preventDefault(); choose(p); });  // respond on press
         return li;
       }) : [el("li", { class: "none", role: "option", "aria-disabled": "true", text: "No city or town by that name" })]));
@@ -442,7 +443,7 @@
       return el("li", {}, btn);
     };
     $("#town-result").replaceChildren(el("div", { class: "town" },
-      el("div", { class: "town-head" }, el("h3", { text: p.name }), el("p", { text: `${p.province} · ${p.region}${p.independent && p.province !== "Metro Manila" ? " · independent city" : ""}` })),
+      el("div", { class: "town-head" }, el("h3", { text: p.name }), el("p", { text: `${p.province}, ${p.region}${p.independent && p.province !== "Metro Manila" ? " · independent city" : ""}` })),
       el("div", { class: "town-tiles" },
         dayTile(today, "Today"), dayTile(addDays(today, 1), "Tomorrow"),
         el("div", { class: "tile" }, el("p", { class: "k", text: "School days lost" }), el("p", { class: "v big", text: pctText(lost.length, total) }),

@@ -144,10 +144,10 @@ select {
   transform-origin: top center; animation: pop-in 180ms var(--ease);
 }
 @keyframes pop-in { from { opacity: 0; transform: scale(0.98) translateY(-4px); } to { opacity: 1; transform: none; } }
-.search-results li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 12px; border-radius: 9px; cursor: pointer; }
+.search-results li { display: block; padding: 10px 12px; border-radius: 9px; cursor: pointer; line-height: 1.35; }
 .search-results li .nm { font-weight: 500; color: var(--ink); }
 .search-results li .nm mark { background: none; color: var(--accent); font-weight: 650; }
-.search-results li .pl { font-size: 0.8125rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-results li .pl { color: var(--ink-2); }  /* one entry: Town, Province, Region */
 .search-results li[aria-selected="true"], .search-results li:hover { background: var(--accent); }
 .search-results li[aria-selected="true"] .nm, .search-results li[aria-selected="true"] .nm mark,
 .search-results li[aria-selected="true"] .pl, .search-results li:hover .nm, .search-results li:hover .nm mark, .search-results li:hover .pl { color: #fff; }
