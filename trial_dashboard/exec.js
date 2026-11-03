@@ -189,12 +189,10 @@
   }
 
   function renderKpis(rs) {
-    const lost = lostDays(rs).length;
     const total = schoolDays();
     const provs = provinceRows(rs).sort((a, b) => b.days - a.days);
     const kpi = (v, l, s) => el("div", { class: "kpi" }, el("p", { class: "v", text: v }), el("p", { class: "l", text: l }), el("p", { class: "s", text: s }));
     $("#kpis").replaceChildren(
-      kpi(pctText(lost, total), "of school days had a suspension", `${fmt(lost)} of ${fmt(total)} school days, somewhere${where() || " in the country"}`),
       kpi(fmt(lguOnly(rs).length), "LGU suspensions", "one city, town or province suspending classes for one day"),
       kpi(fmt(provs.length), "Provinces affected", state.region ? `in ${state.region}` : "including Metro Manila"),
       provs.length ? kpi(pctText(provs[0].days, total), `Hardest hit: ${provs[0].province}`, `${fmt(provs[0].days)} of ${fmt(total)} school days lost`)
@@ -225,8 +223,8 @@
       return;
     }
     const b = (t) => el("b", { text: t });
-    out.push(el("li", {}, "From ", period(), where(), ", classes were suspended somewhere on ", b(`${fmt(lost.length)} of ${fmt(total)} school days (${pctText(lost.length, total)})`),
-      `, adding up to ${fmt(lgu.length)} LGU suspensions.`,
+    out.push(el("li", {}, "From ", period(), where(), ", cities, towns and provinces suspended classes ", b(`${fmt(lgu.length)} times`),
+      ` (one LGU for one day), across ${plural(lost.length, "school day")}.`,
       state.year === "all" && YEARS.length > 1 ? ` By year: ${YEARS.map((y) => `${yearLabel(y)}: ${fmt(lguOnly(rs.filter((r) => r.year === y)).length)}`).join("; ")}.` : ""));
 
     const byCause = [...countBy(lost, (d) => H.days[d].cause)].sort((a, c) => c[1] - a[1]);
