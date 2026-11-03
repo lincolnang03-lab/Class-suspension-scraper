@@ -26,20 +26,7 @@
     <a class="check-link" href="check.html">Check a city or town →</a>
   </header>
 
-  <!-- Upcoming: from the live checker -->
-  <section class="card now" aria-labelledby="now-title">
-    <div class="card-head row">
-      <div>
-        <h2 id="now-title">Now and next</h2>
-        <p class="muted" id="now-checked">Loading the latest check…</p>
-      </div>
-      <button type="button" class="btn primary" id="check-now">Check now</button>
-    </div>
-    <p class="check-status" id="check-status" aria-live="polite" hidden></p>
-    <div class="now-days" id="now-days"></div>
-    <p class="banner" id="now-banner" hidden></p>
-    <div class="breakdown" id="now-breakdown"></div>
-  </section>
+  <h2 class="section-title">Overall</h2>
 
   <!-- Filters -->
   <section class="filters" aria-label="Filters">
@@ -99,6 +86,28 @@
       <div class="bars" id="levels"></div>
     </section>
   </div>
+
+  <h2 class="section-title" id="bydate-anchor">Per-date breakdown</h2>
+
+  <section class="card bydate" aria-labelledby="bydate-title">
+    <div class="card-head row">
+      <div>
+        <h2 id="bydate-title">Every place, by date</h2>
+        <p class="muted" id="now-checked">Loading the latest check…</p>
+      </div>
+      <button type="button" class="btn primary" id="check-now">Check now</button>
+    </div>
+    <p class="check-status" id="check-status" aria-live="polite" hidden></p>
+    <div class="now-days" id="now-days" role="group" aria-label="Today and tomorrow"></div>
+    <p class="banner" id="now-banner" hidden></p>
+    <div class="date-row">
+      <label class="field"><span>Date</span><select id="f-date"></select></label>
+      <p class="muted" id="date-sum"></p>
+      <button type="button" class="btn" id="dl-date">Download this date (CSV)</button>
+    </div>
+    <div class="table-wrap"><table class="tbl bd" id="t-date"></table></div>
+    <p class="muted small-note">Confidence: 5 = three or more outlets, or PNA/DepEd plus another; 4 = two outlets, or PNA/DepEd alone; 3 = one outlet; one point less for each missing detail (levels, public/private) or a quote not found word for word. Past dates come from Rappler's roundups only, so they score 3 at most.</p>
+  </section>
 
   <section class="card method" aria-labelledby="method-title">
     <div class="card-head row">

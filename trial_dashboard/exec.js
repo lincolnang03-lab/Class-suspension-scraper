@@ -35,7 +35,7 @@
   const unique = (xs) => [...new Set(xs)];
   const countBy = (xs, f) => xs.reduce((m, x) => m.set(f(x), (m.get(f(x)) || 0) + 1), new Map());
 
-  const state = { year: "all", region: "", metric: "lgu", provSort: "days", provDir: -1, provAll: false };
+  const state = { year: "all", region: "", metric: "lgu", provSort: "days", provDir: -1, provAll: false, date: "" };
   let H = null, LIVE = null, RECS = [], CAUSES = [], YEARS = [], FULL_YEARS = [];
   const charts = {};
 
@@ -60,7 +60,6 @@
     FULL_YEARS = h.covered.filter(([a, b]) => a.endsWith("-01-01") && b.endsWith("-12-31")).map(([a]) => a.slice(0, 4));
     buildControls();
     render();
-    renderNow();
     setInterval(() => loadLive().then((l) => { LIVE = l; renderNow(); }).catch(() => {}), 5 * 60 * 1000);
   }).catch((e) => { $("#lede").textContent = `Couldn't load the data (${e.message}).`; });
 
@@ -98,6 +97,13 @@
       public_private: r.sector || "not stated", face_to_face_only: r.inPerson ? "yes" : "no", part_of_day: r.partDay ? "yes" : "no",
       cause: r.cause, storm: H.days[r.date].storms.join("; "), source: H.days[r.date].url }))));
     $("#prov-more").addEventListener("click", () => { state.provAll = !state.provAll; renderProvinces(filtered()); });
+    $("#f-date").addEventListener("change", (e) => { state.date = e.target.value; renderByDate(); });
+    // A shared link can open a given date: ?date=2026-08-06
+    const wanted = new URLSearchParams(location.search).get("date");
+    if (/^\d{4}-\d{2}-\d{2}$/.test(wanted || "")) state.date = wanted;
+    $("#dl-date").addEventListener("click", () => downloadCsv(`class_suspensions_${state.date}`, rowsFor(state.date).map((r) => ({
+      date: r.date, region: r.region, province: r.province, city_or_town: placeName(r), levels_suspended: levelsText(r.mask),
+      details: r.notes.join("; "), confidence: r.conf, confidence_reason: r.why, outlets: r.outlets.join("; "), source: r.url || "" }))));
   }
 
   const inRegion = (r) => !state.region || r.region === state.region;
@@ -116,6 +122,7 @@
     renderProvinces(rs);
     renderEvents(rs);
     renderLevels(rs);
+    if (H) renderNow();
     $("#coverage").textContent = `Past data covers ${H.covered.map(([a, b]) => `${dayLabel(a, { month: "short", day: "numeric", year: "numeric" })} – ${dayLabel(b, { month: "short", day: "numeric", year: "numeric" })}`).join("; ")}.`;
     $("#footer").textContent = `Built from ${fmt(RECS.length)} records on ${unique(RECS.map((r) => r.date)).length} days. Source: ${H.source}; upcoming suspensions from the live news checker.`;
   }
@@ -383,84 +390,180 @@
       el("small", { text: note }))));
   }
 
-  // ── Now and next (live checker) ───────────────────────────────────────────
-  function renderNow() {
-    const box = $("#now-days");
-    if (!LIVE) {
-      $("#now-checked").textContent = "The live checker's results couldn't be loaded.";
-      box.replaceChildren();
-      return;
-    }
-    const today = phToday();
-    const age = Date.now() - new Date(LIVE.checked_at).getTime();
-    $("#now-checked").textContent = `From the news, checked ${timeText(LIVE.checked_at)}. Checked every day at 5 AM; press Check now for the latest.`;
-    const issues = [];
-    if (age > 26 * 3600 * 1000) issues.push(`The checker hasn't run since ${timeText(LIVE.checked_at)}, so newer announcements may be missing.`);
-    if ((LIVE.problems || []).some((p) => p.startsWith("AI couldn't read"))) issues.push("Some new articles haven't been read yet.");
-    $("#now-banner").hidden = !issues.length;
-    $("#now-banner").textContent = issues.join(" ");
+  // ── Per-date breakdown: province, city, levels suspended, confidence ──────
+  const LEVEL_KEYS = ["preschool", "elementary", "junior_high", "senior_high", "college"];
+  const SHOWN = new Set([...ACTIVE, "lifted"]);
+  const maskOf = (levels) => (levels ? LEVEL_KEYS.reduce((m, k, i) => m | (levels[k] ? 1 << i : 0), 0) : -1);
 
-    const active = (LIVE.records || []).filter((r) => ACTIVE.has(r.status));
-    const dates = unique([today, addDays(today, 1), ...active.map((r) => r.date).filter((d) => d > addDays(today, 1))]).sort();
-    box.replaceChildren(...dates.map((d) => {
-      const rs = active.filter((r) => r.date === d);
-      const label = d === today ? "Today" : d === addDays(today, 1) ? "Tomorrow" : dayLabel(d, { weekday: "long" });
-      const areas = unique(rs.map((r) => (r.scope === "national" ? "Nationwide" : r.scope === "region" ? r.region : r.province)).filter(Boolean));
-      return el("div", { class: `now-day${rs.length ? " has" : ""}` },
-        el("p", { class: "when", text: `${label} · ${dayLabel(d, { month: "short", day: "numeric" })}` }),
-        el("p", { class: "n", text: rs.length ? plural(rs.length, "place") : "None announced" }),
-        el("p", { class: "where", text: rs.length ? `${areas.slice(0, 6).join(", ")}${areas.length > 6 ? ` and ${areas.length - 6} more` : ""}` : "No suspension in the news so far." }));
-    }));
-    renderBreakdown((LIVE.records || []).filter((r) => (ACTIVE.has(r.status) || r.status === "lifted") && r.date >= today));
+  function levelsText(mask) {
+    if (mask < 0 || mask === 0) return "Not stated";
+    if (mask === 31) return "All levels";
+    const on = LEVEL_LABELS.filter((_, i) => mask & (1 << i));
+    const idx = LEVEL_LABELS.map((_, i) => i).filter((i) => mask & (1 << i));
+    const contiguous = idx[idx.length - 1] - idx[0] === idx.length - 1;
+    if (on.length === 1) return `${on[0]} only`;
+    return contiguous ? `${on[0]} to ${on[on.length - 1]}` : on.join(", ");
+  }
+  const SECTOR_TEXT = { public: "public schools only", private: "private schools only" };
+
+  // One row per place, from the live check (upcoming) or the past data (Rappler roundups)
+  function liveRow(r) {
+    const notes = [];
+    if (r.status === "online_or_modular") notes.push("moved online / modular");
+    if (r.status === "opening_postponed") notes.push("school opening postponed");
+    if (r.status === "lifted") notes.push("suspension lifted");
+    if ((r.notes || []).includes("In-person only")) notes.push("face-to-face classes only");
+    if ((r.notes || []).some((n) => n.startsWith("From"))) notes.push(r.notes.find((n) => n.startsWith("From")).toLowerCase());
+    const sector = { "Public only": "public", "Private only": "private" }[r.sector];
+    if (sector) notes.push(SECTOR_TEXT[sector]);
+    return { date: r.date, region: r.region || "", province: r.province || "", city: r.city, scope: r.scope,
+      mask: maskOf(r.levels), notes, lifted: r.status === "lifted", conf: r.confidence, why: r.confidence_reason,
+      url: r.sources[0] && r.sources[0].url, outlets: unique(r.sources.map((x) => x.outlet)) };
+  }
+  function pastRow(r) {
+    const notes = [];
+    if (r.inPerson) notes.push("face-to-face classes only");
+    if (r.partDay) notes.push("part of the day");
+    if (SECTOR_TEXT[r.sector]) notes.push(SECTOR_TEXT[r.sector]);
+    // Same rule as the live checker: one outlet = 3, one point less per missing detail
+    let conf = 3; const why = ["1 outlet (Rappler)"];
+    if (r.mask < 0) { conf -= 1; why.push("levels not stated"); }
+    if (!r.sector) { conf -= 1; why.push("public/private not stated"); }
+    return { date: r.date, region: r.region, province: r.province,
+      city: r.scope === "province" ? "all cities" : r.city, scope: r.scope === "partial" ? "schools" : r.scope,
+      mask: r.mask, notes, lifted: false, conf: Math.max(1, conf), why: why.join("; "),
+      url: H.days[r.date].url, outlets: ["Rappler"] };
   }
 
-  // Day cards: each day, then province, then every city or town with what was suspended and the source
-  const STATUS_PREFIX = { online_or_modular: "Moved online / modular: ", opening_postponed: "School opening postponed: ", lifted: "Suspension lifted: " };
-  function placeLabel(r) {
+  function liveRows() {
+    return LIVE ? (LIVE.records || []).filter((r) => SHOWN.has(r.status)).map(liveRow) : [];
+  }
+  function rowsFor(d) {
+    const live = liveRows().filter((r) => r.date === d);
+    // The live check covers yesterday to 3 days ahead; earlier dates come from the past data
+    const rows = live.length || (LIVE && d >= addDays(LIVE.today, -1)) ? live : filtered().filter((r) => r.date === d).map(pastRow);
+    return rows.filter(inRegion);
+  }
+
+  function dateOptions() {
+    const today = phToday();
+    const upcoming = unique([today, addDays(today, 1), ...liveRows().filter(inRegion).map((r) => r.date).filter((d) => d >= today)]).sort();
+    const past = unique(filtered().map((r) => r.date)).filter((d) => d < today).sort().reverse();
+    return { upcoming, past };
+  }
+
+  function defaultDate({ upcoming, past }) {
+    return upcoming.find((d) => rowsFor(d).length) || past[0] || upcoming[0];
+  }
+
+  function renderByDate() {
+    const opts = dateOptions();
+    const all = [...opts.upcoming, ...opts.past];
+    if (!state.date || !all.includes(state.date)) state.date = defaultDate(opts);
+    const today = phToday();
+    const label = (d) => {
+      const n = rowsFor(d).length;
+      const word = d === today ? "Today, " : d === addDays(today, 1) ? "Tomorrow, " : "";
+      return `${word}${dayLabel(d, { weekday: "short", month: "short", day: "numeric", year: "numeric" })} — ${n ? plural(n, "place") : "none announced"}`;
+    };
+    const byMonth = new Map();
+    opts.past.forEach((d) => { const m = d.slice(0, 7); if (!byMonth.has(m)) byMonth.set(m, []); byMonth.get(m).push(d); });
+    $("#f-date").replaceChildren(
+      el("optgroup", { label: "Today and coming days" }, ...opts.upcoming.map((d) => el("option", { value: d, text: label(d) }))),
+      ...[...byMonth].map(([m, ds]) => el("optgroup", { label: `${MONTH_FULL[+m.slice(5) - 1]} ${m.slice(0, 4)}` },
+        ...ds.map((d) => el("option", { value: d, text: label(d) })))));
+    $("#f-date").value = state.date;
+    try { history.replaceState(null, "", `?date=${state.date}${location.hash}`); } catch { /* file:// or sandboxed */ }
+    renderNowBoxes(opts.upcoming.slice(0, 2));
+    renderDateTable();
+  }
+
+  function renderNowBoxes(days) {
+    const today = phToday();
+    $("#now-days").replaceChildren(...days.map((d) => {
+      const rs = rowsFor(d);
+      const areas = unique(rs.map((r) => (r.scope === "national" ? "Nationwide" : r.scope === "region" ? r.region : r.province)).filter(Boolean));
+      const b = el("button", { type: "button", class: `now-day${rs.length ? " has" : ""}`, "aria-pressed": String(state.date === d) },
+        el("span", { class: "when", text: `${d === today ? "Today" : "Tomorrow"} · ${dayLabel(d, { month: "short", day: "numeric" })}` }),
+        el("span", { class: "n", text: rs.length ? plural(rs.length, "place") : "None announced" }),
+        el("span", { class: "where", text: rs.length ? `${areas.slice(0, 6).join(", ")}${areas.length > 6 ? ` and ${areas.length - 6} more` : ""}` : "No suspension in the news so far." }));
+      b.addEventListener("click", () => { state.date = d; renderByDate(); });
+      return b;
+    }));
+  }
+
+  function placeName(r) {
     if (r.scope === "national") return "Nationwide";
-    if (r.scope === "region") return `All of ${r.region}`;
-    if (r.scope === "province") return `All of ${r.province}`;
-    if (r.scope === "schools" || !r.city) return `Some schools in ${r.province}`;
+    if (r.scope === "region") return "Whole region";
+    if (r.scope === "province" || r.city === "all cities") return r.province === "Metro Manila" ? "All of Metro Manila" : "Whole province";
+    if (r.scope === "schools" || !r.city) return r.city ? `Some schools: ${r.city}` : "Some schools";
     return r.city;
   }
-  function groupOf(r) {
-    if (r.scope === "national") return ["Nationwide", ""];
-    if (r.scope === "region") return [r.region, "whole region"];
-    return [r.province || "Province not stated", r.region || ""];
+
+  function pips(n) {
+    return el("span", { class: "pips", "aria-hidden": "true" }, ...[1, 2, 3, 4, 5].map((i) => el("i", { class: i <= n ? "f" : "" })));
   }
-  function renderBreakdown(recs) {
-    const days = unique(recs.map((r) => r.date)).sort();
-    $("#now-breakdown").replaceChildren(...days.map((d) => {
-      const dayRecs = recs.filter((r) => r.date === d);
-      const groups = new Map();
-      dayRecs.forEach((r) => { const [g] = groupOf(r); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(r); });
-      const order = [...groups.keys()].sort((a, b) => (a === "Nationwide" ? -1 : b === "Nationwide" ? 1 : 0)
-        || (regionRank(groups.get(a)[0].region) - regionRank(groups.get(b)[0].region)) || a.localeCompare(b));
-      const rank = (r) => ({ national: 0, region: 1, province: 2, city: 3, schools: 4 }[r.scope] ?? 5);
-      return el("section", { class: "date-card" },
-        el("h3", { class: "date-head" }, dayLabel(d, { weekday: "long", month: "long", day: "numeric" }),
-          el("small", { text: plural(dayRecs.length, "place") })),
-        ...order.map((g) => {
-          const list = groups.get(g).sort((a, b) => rank(a) - rank(b) || placeLabel(a).localeCompare(placeLabel(b)));
-          const sub = groupOf(list[0])[1];
-          return el("div", { class: "province" },
-            el("h4", {}, g, sub ? el("span", { text: ` · ${sub}` }) : null),
-            ...list.map(placeRow));
-        }));
-    }));
-  }
-  function placeRow(r) {
-    const outlets = [...new Map(r.sources.map((s) => [s.outlet, s.url])).entries()];
-    const src = el("span", { class: "src" }, "Source: ");
-    outlets.forEach(([outlet, url], i) => {
-      if (i) src.append(" · ");
-      src.append(el("a", { href: url, target: "_blank", rel: "noopener", text: outlet }));
+
+  function renderDateTable() {
+    const d = state.date;
+    const rows = rowsFor(d);
+    const groups = new Map();
+    rows.forEach((r) => {
+      const g = r.scope === "national" ? "Nationwide" : r.scope === "region" ? `${r.region} (whole region)` : r.province || "Province not stated";
+      if (!groups.has(g)) groups.set(g, []);
+      groups.get(g).push(r);
     });
-    const wide = r.scope === "province" || r.scope === "region" || r.scope === "national";
-    return el("div", { class: `place${r.status === "lifted" ? " is-lifted" : ""}` },
-      el("div", { class: "name" }, placeLabel(r),
-        wide ? el("span", { class: "tag", text: r.scope === "province" && r.province !== "Metro Manila" ? "entire province" : "entire region" }) : null),
-      el("div", { class: "info" }, `${STATUS_PREFIX[r.status] || ""}${r.suspension_info || "classes suspended"}`, src));
+    const order = [...groups.keys()].sort((a, b) => (a === "Nationwide" ? -1 : b === "Nationwide" ? 1 : 0)
+      || (regionRank(groups.get(a)[0].region) - regionRank(groups.get(b)[0].region)) || a.localeCompare(b));
+    const rank = (r) => ({ national: 0, region: 1, province: 2, city: 3, schools: 4 }[r.scope] ?? 5);
+    const fromLive = rows.length && LIVE && d >= addDays(LIVE.today, -1);
+    $("#date-sum").textContent = rows.length
+      ? `${dayLabel(d, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}: ${plural(rows.length, "place")} in ${plural(groups.size, "province")}${where()}. ${fromLive ? "From the live check." : "From Rappler's roundup."}`
+      : `${dayLabel(d, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}: no suspensions${where()} ${d >= phToday() ? "announced so far" : "recorded"}.`;
+    $("#dl-date").hidden = !rows.length;
+    const head = el("thead", {}, el("tr", {},
+      el("th", { scope: "col", text: "Province" }), el("th", { scope: "col", text: "City / town" }),
+      el("th", { scope: "col", text: "Levels suspended" }), el("th", { scope: "col", text: "Confidence" })));
+    if (!rows.length) {
+      $("#t-date").replaceChildren(head, el("tbody", {}, el("tr", {}, el("td", { colspan: "4", class: "empty-cell", text: "Nothing to show for this date." }))));
+      return;
+    }
+    const body = [];
+    order.forEach((g) => {
+      const list = groups.get(g).sort((a, b) => rank(a) - rank(b) || placeName(a).localeCompare(placeName(b)));
+      list.forEach((r, i) => {
+        const cells = [];
+        if (i === 0) {
+          cells.push(el("th", { scope: "rowgroup", rowspan: String(list.length), class: "prov-cell" }, g,
+            r.region && r.scope !== "region" && r.scope !== "national" ? el("span", { class: "sub", text: r.region }) : null));
+        }
+        cells.push(
+          el("td", { class: "place-cell", "data-label": "City / town" },
+            r.url ? el("a", { href: r.url, target: "_blank", rel: "noopener", text: placeName(r) }) : placeName(r)),
+          el("td", { "data-label": "Levels suspended" }, el("span", { class: r.lifted ? "lifted" : "", text: levelsText(r.mask) }),
+            r.notes.length ? el("span", { class: "sub", text: r.notes.join(" · ") }) : null),
+          el("td", { class: "conf-cell", "data-label": "Confidence", title: r.why }, pips(r.conf), el("b", { text: ` ${r.conf}/5` }),
+            el("span", { class: "sub", text: r.why })));
+        body.push(el("tr", { class: i === 0 ? "group-start" : "" }, ...cells));
+      });
+    });
+    $("#t-date").replaceChildren(head, el("tbody", {}, ...body));
+  }
+
+  // Header line and warnings for the live check; then the breakdown
+  function renderNow() {
+    if (!LIVE) {
+      $("#now-checked").textContent = "The live checker's results couldn't be loaded; past dates are still shown.";
+    } else {
+      const age = Date.now() - new Date(LIVE.checked_at).getTime();
+      $("#now-checked").textContent = `Coming days from the news, checked ${timeText(LIVE.checked_at)}. Checked every day at 5 AM; press Check now for the latest.`;
+      const issues = [];
+      if (age > 26 * 3600 * 1000) issues.push(`The checker hasn't run since ${timeText(LIVE.checked_at)}, so newer announcements may be missing.`);
+      if ((LIVE.problems || []).some((p) => p.startsWith("AI couldn't read"))) issues.push("Some new articles haven't been read yet.");
+      $("#now-banner").hidden = !issues.length;
+      $("#now-banner").textContent = issues.join(" ");
+    }
+    renderByDate();
   }
 
   // ── Check now: start a news check and wait for it ─────────────────────────
