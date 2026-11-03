@@ -1,4 +1,4 @@
-/* Lost School Days — figures computed in the browser from history.json (past), data.json (coming days)
+/* Class Suspension Tracker — figures computed in the browser from history.json (past), data.json (coming days)
    and places.json (every city and town). */
 (() => {
   const REGION_ORDER = [
