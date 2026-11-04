@@ -226,13 +226,20 @@
         currentView = viewState;
       },
       onHover: (info) => { showTip(info); hover(info.object || null); },
-      onClick: (info) => { showTip(info); hover(info.object || null); },
+      // Click a province for its figures; click the sea to close them
+      onClick: (info) => { $("#map-tip").hidden = true; pick(info.object || null); },
       getCursor: ({ isDragging, isHovering }) => (isDragging ? "grabbing" : isHovering ? "pointer" : "grab"),
     });
     const zoomBy = (d) => flyTo({ ...currentView, zoom: Math.max(currentView.minZoom ?? 4, Math.min(11, currentView.zoom + d)) });
     $("#map-in").addEventListener("click", () => zoomBy(0.6));
     $("#map-out").addEventListener("click", () => zoomBy(-0.6));
     $("#map-reset").addEventListener("click", () => flyTo(homeView()));
+    $("#map-full").addEventListener("click", () => expandMap(!expanded));
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape" || e.target.id === "town") return;   // the search box handles its own Esc
+      if (picked) pick(null);
+      else if (expanded) expandMap(false);
+    });
     // Re-fit when the card changes size (phone rotation, window resize)
     new ResizeObserver(() => { flyTo({ ...homeView(), transitionDuration: 0 }); renderMap(lastMapRs); }).observe($("#map"));
     mapReady = true;
@@ -255,8 +262,8 @@
     tip.style.transform = `translate(${Math.max(8, x)}px, ${y}px)`;
   }
 
-  // Hover: a dark outline and a deeper shade on the province under the pointer (and nothing else)
-  let hovered = null, baseLayer = null;
+  // Hover and the picked province: a dark outline and a deeper shade (on those provinces and nothing else)
+  let hovered = null, baseLayer = null, picked = null;
   const darker = (c, k = 0.82) => c.map((v, i) => (i < 3 ? Math.round(v * k) : v));
   function hover(f) {
     if ((f && f.properties.name) === (hovered && hovered.properties.name)) return;
@@ -264,13 +271,80 @@
     drawLayers();
   }
   function highlightLayers() {
-    if (!hovered) return [];
-    const shapes = (baseLayer ? baseLayer.props.data : GEO.features).filter((g) => g.properties.name === hovered.properties.name);
-    return [
-      new deck.GeoJsonLayer({ id: "hover-province", data: shapes, filled: true, stroked: true,
-        getFillColor: darker(hovered.__fill || [200, 200, 200, 255]), getLineColor: [29, 29, 31, 255],
-        lineWidthUnits: "pixels", getLineWidth: 2.5 }),
-    ];
+    const data = baseLayer ? baseLayer.props.data : GEO.features;
+    return unique([picked, hovered && hovered.properties.name].filter(Boolean)).map((name) =>
+      new deck.GeoJsonLayer({ id: `outline-${name}`, data: data.filter((g) => g.properties.name === name), filled: true, stroked: true,
+        getFillColor: (g) => darker(g.__fill || [200, 200, 200, 255]), getLineColor: [29, 29, 31, 255],
+        lineWidthUnits: "pixels", getLineWidth: name === picked ? 3 : 2.5 }));
+  }
+
+  // ── Overall: a province's figures in a panel over the map (the same as searching it, made compact) ──
+  let panelAll = false;
+  function pick(f) {
+    const name = f ? f.properties.name : null;
+    if (name === picked) return;
+    picked = name;
+    panelAll = false;
+    renderPanel();
+    drawLayers();
+  }
+  function renderPanel() {
+    const box = $("#map-panel");
+    if (!picked) { box.hidden = true; box.replaceChildren(); return; }
+    const shape = GEO.features.find((g) => g.properties.name === picked);
+    const p = SEARCH.find((s) => s.kind === "Province" && placeKey(s.name) === placeKey(picked))
+      || { kind: "Province", name: picked, province: picked, region: shape ? shape.properties.region : "" };
+    const { hits, lost, total, causes } = summary(p, state.year);
+    const byDate = datesOf(hits);
+    const allDates = [...byDate.keys()].sort().reverse();
+    const N = 5;
+    const today = phToday(), live = liveFor(p), short = { month: "short", day: "numeric" };
+    const close = el("button", { type: "button", class: "mp-close", "aria-label": `Close ${p.name}` });
+    close.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 6l8 8M14 6l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+    close.addEventListener("click", () => pick(null));
+    const more = allDates.length > N ? el("button", { type: "button", class: "btn small", text: panelAll ? "Show fewer" : `Show all ${allDates.length}` }) : null;
+    if (more) more.addEventListener("click", () => { panelAll = !panelAll; renderPanel(); });
+    box.setAttribute("aria-label", `${p.name}: class suspensions`);
+    box.replaceChildren(
+      el("div", { class: "mp-head" }, el("div", {}, el("h3", { text: p.name }), el("p", { text: `Province · ${p.region}` })), close),
+      el("div", { class: "mp-stat" }, el("p", { class: "v", text: pctText(lost.length, total) }),
+        el("p", { class: "s", text: `of school days lost: ${lost.length} of ${fmt(total)}, ${sinceText(state.year)}` })),
+      el("div", { class: "mp-tiles" }, dayTile(p, live, today, "Today", short), dayTile(p, live, addDays(today, 1), "Tomorrow", short)),
+      reasonsBlock(causes, lost),
+      allDates.length
+        ? el("div", {}, el("p", { class: "list-title", text: `${plural(allDates.length, "day")} with class suspensions` }),
+          el("ul", { class: "list compact" }, ...(panelAll ? allDates : allDates.slice(0, N)).map((d) => el("li", {}, el("div", { class: "row" }, ...dayParts(p, byDate.get(d), d))))),
+          more)
+        : el("p", { class: "muted", text: "No class suspensions recorded in this period." }));
+    box.hidden = false;
+  }
+
+  // ── Overall: the map, expanded to fill the screen (the page behind it stops scrolling) ──
+  let expanded = false, keepSpace = null, scrollBack = 0;
+  function expandMap(on) {
+    if (on === expanded) return;
+    expanded = on;
+    const card = $(".map-card");
+    if (on) {
+      scrollBack = window.scrollY;
+      keepSpace = el("div", { style: `height:${card.offsetHeight}px` });   // holds the card's place so the page doesn't jump
+      card.before(keepSpace);
+    } else if (keepSpace) {
+      keepSpace.remove();
+      keepSpace = null;
+    }
+    card.classList.toggle("expanded", on);
+    document.documentElement.classList.toggle("map-locked", on);
+    const btn = $("#map-full");
+    btn.setAttribute("aria-pressed", String(on));
+    btn.setAttribute("aria-label", on ? "Close the full-screen map" : "Expand the map to full screen");
+    btn.innerHTML = on
+      ? '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 3v5H3M12 3v5h5M8 17v-5H3M12 17v-5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+      : '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 8V3h5M17 8V3h-5M3 12v5h5M17 12v5h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    // Full screen: the scroll wheel zooms, since there's no page to scroll
+    MAP.setProps({ controller: { scrollZoom: on, inertia: reduceMotion ? 0 : 350, dragRotate: false, touchRotate: false, keyboard: true } });
+    $("#map-hint").textContent = on ? "Drag to move · scroll, pinch or +/− to zoom · click a province · Esc to close" : "Drag to move · pinch or +/− to zoom · click a province";
+    if (!on) window.scrollTo(0, scrollBack);
   }
   function drawLayers() {
     if (MAP && baseLayer) MAP.setProps({ layers: [baseLayer, ...highlightLayers()] });
@@ -410,13 +484,59 @@
     if (r.scope === "region") return r.region === p.region;
     return r.scope === "national";
   }
-  // Totals for one place, for the year picked next to the search box
-  function summary(p) {
-    const y = state.searchYear;
+  // Totals for one place: for the year picked next to the search box, or the map's year
+  function summary(p, y = state.searchYear) {
     const [a, b] = periodRange(y);
     const hits = RECS.filter((r) => r.date >= a && r.date <= b && covers(r, p));
     const lost = lostDays(hits);
     return { hits, lost, total: schoolDays(y), causes: [...countBy(lost, (d) => H.days[d].cause)].sort((x, y) => y[1] - x[1]) };
+  }
+  const sinceText = (y) => (y === "all" ? `since Jan ${YEARS[0]}` : yearLabel(y));
+
+  // ── A place's figures, shared by the search result and the map's province panel ──
+  const liveFor = (p) => (LIVE ? (LIVE.records || []).filter((r) => SHOWN.has(r.status) && covers(r, p)) : []);
+  function dayTile(p, live, d, word, when = { weekday: "short", month: "short", day: "numeric" }) {
+    const rs = live.filter((r) => r.date === d);
+    const act = rs.filter((r) => ACTIVE.has(r.status));
+    let text = "No suspension announced";
+    if (act.length && p.kind !== "Province") text = `${act[0].status === "online_or_modular" ? "Moved online" : "Suspended"}: ${levelsText(maskOf(act[0].levels))}`;
+    else if (act.length) text = act.some((r) => r.scope !== "city") ? "Suspended province-wide" : `${plural(act.length, "place")} suspended`;
+    else if (rs.some((r) => r.status === "lifted")) text = "Suspension lifted";
+    return el("div", { class: `tile${act.length ? " on" : ""}` }, el("p", { class: "k", text: `${word} · ${dayLabel(d, when)}` }),
+      el("p", { class: "v" }, el("span", { class: "dot", "aria-hidden": "true" }), text));
+  }
+  // Why school days were lost: days per cause, as bars
+  function reasonsBlock(causes, lost) {
+    if (!causes.length) return null;
+    const top = causes[0][1];
+    return el("div", { class: "reasons" },
+      el("p", { class: "list-title", text: "Why school days were lost" }),
+      el("ul", { class: "reason-list" }, ...causes.map(([c, n]) => el("li", {},
+        el("span", { class: "rn" }, el("i", { style: `background:${css(groupOf(c)[2])}` }), SHORT_CAUSE[c] || c),
+        el("span", { class: "rb" }, el("i", { style: `width:${Math.max(4, Math.round((100 * n) / top))}%; background:${css(groupOf(c)[2])}` })),
+        el("span", { class: "rv", text: `${plural(n, "day")} · ${pctText(n, lost.length)}` })))));
+  }
+  function datesOf(hits) {
+    const byDate = new Map();
+    hits.forEach((r) => { if (!byDate.has(r.date)) byDate.set(r.date, []); byDate.get(r.date).push(r); });
+    return byDate;
+  }
+  // One day's line. A town: its own announcement wins over a province-wide one. A province: count its LGUs.
+  function dayParts(p, rs, d) {
+    const isProv = p.kind === "Province";
+    const cause = H.days[d].cause;
+    const wide = rs.find((r) => r.scope !== "city" && r.scope !== "partial");
+    const own = rs.find((r) => r.scope === "city");
+    const rep = isProv ? (wide || rs[0]) : (own || wide || rs[0]);
+    const towns = unique(rs.filter((r) => r.scope === "city").map((r) => placeKey(r.city))).length;
+    const main = isProv ? (wide ? `Whole province · ${levelsText(rep.mask)}` : plural(towns, "city or town", "cities and towns")) : levelsText(rep.mask);
+    const details = [!isProv && !own && wide ? "province-wide" : "", isProv && wide && towns ? `plus ${plural(towns, "local order")}` : "",
+      rep.inPerson ? "face-to-face only" : "", isSchoolDay(d) ? "" : "not a school day"].filter(Boolean);
+    return [
+      el("span", { class: "d", text: dayLabel(d, { weekday: "short", month: "short", day: "numeric" }) }),
+      el("span", { class: "what" }, main, details.length ? el("small", { text: details.join(" · ") }) : null),
+      el("span", { class: "tag", style: `--c: ${css(groupOf(cause)[2])}`, text: SHORT_CAUSE[cause] || cause }),
+    ];
   }
 
   // Search: a combobox with a custom results list (keyboard: ↑ ↓ Enter Esc)
@@ -482,63 +602,31 @@
     if (!p) { $("#town-result").replaceChildren(); state.townAll = false; card.classList.remove("show-day"); return; }
     const isProv = p.kind === "Province";
     const { hits, lost, total, causes } = summary(p);
-    // One row per date. A town: its own announcement wins over a province-wide one. A province: count its LGUs.
-    const byDate = new Map();
-    hits.forEach((r) => { if (!byDate.has(r.date)) byDate.set(r.date, []); byDate.get(r.date).push(r); });
+    const byDate = datesOf(hits);
     const allDates = [...byDate.keys()].sort().reverse();
     const SHOWN_N = 8;
     const dates = state.townAll ? allDates : allDates.slice(0, SHOWN_N);
     const today = phToday();
-    const live = LIVE ? (LIVE.records || []).filter((r) => SHOWN.has(r.status) && covers(r, p)) : [];
-    const dayTile = (d, word) => {
-      const rs = live.filter((r) => r.date === d);
-      const act = rs.filter((r) => ACTIVE.has(r.status));
-      let text = "No suspension announced";
-      if (act.length && !isProv) text = `${act[0].status === "online_or_modular" ? "Moved online" : "Suspended"}: ${levelsText(maskOf(act[0].levels))}`;
-      else if (act.length) text = act.some((r) => r.scope !== "city") ? "Suspended province-wide" : `${plural(act.length, "place")} suspended`;
-      else if (rs.some((r) => r.status === "lifted")) text = "Suspension lifted";
-      return el("div", { class: `tile${act.length ? " on" : ""}` }, el("p", { class: "k", text: `${word} · ${dayLabel(d, { weekday: "short", month: "short", day: "numeric" })}` }),
-        el("p", { class: "v" }, el("span", { class: "dot", "aria-hidden": "true" }), text));
-    };
+    const live = liveFor(p);
     const months = new Map();
     dates.forEach((d) => { const m = d.slice(0, 7); if (!months.has(m)) months.set(m, []); months.get(m).push(d); });
     const row = (d) => {
-      const rs = byDate.get(d);
-      const cause = H.days[d].cause;
-      const wide = rs.find((r) => r.scope !== "city" && r.scope !== "partial");
-      const own = rs.find((r) => r.scope === "city");
-      const rep = isProv ? (wide || rs[0]) : (own || wide || rs[0]);
-      const towns = unique(rs.filter((r) => r.scope === "city").map((r) => placeKey(r.city))).length;
-      const main = isProv ? (wide ? `Whole province · ${levelsText(rep.mask)}` : plural(towns, "city or town", "cities and towns")) : levelsText(rep.mask);
-      const details = [!isProv && !own && wide ? "province-wide" : "", isProv && wide && towns ? `plus ${plural(towns, "local order")}` : "",
-        rep.inPerson ? "face-to-face only" : "", isSchoolDay(d) ? "" : "not a school day"].filter(Boolean);
       const btn = el("button", { type: "button", class: "row", "aria-label": `${dayLabel(d, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}: open every place suspended that day` },
-        el("span", { class: "d", text: dayLabel(d, { weekday: "short", month: "short", day: "numeric" }) }),
-        el("span", { class: "what" }, main, details.length ? el("small", { text: details.join(" · ") }) : null),
-        el("span", { class: "tag", style: `--c: ${css(groupOf(cause)[2])}`, text: SHORT_CAUSE[cause] || cause }),
-        chevron());
+        ...dayParts(p, byDate.get(d), d), chevron());
       btn.addEventListener("click", () => {
         state.date = d; renderByDate(); card.classList.add("show-day");
         $(".date-row").scrollIntoView({ behavior: "smooth", block: "start" });
       });
       return el("li", {}, btn);
     };
-    // Why school days were lost: days per cause, as bars
-    const topCause = causes.length ? causes[0][1] : 1;
-    const reasons = causes.length ? el("div", { class: "reasons" },
-      el("p", { class: "list-title", text: "Why school days were lost" }),
-      el("ul", { class: "reason-list" }, ...causes.map(([c, n]) => el("li", {},
-        el("span", { class: "rn" }, el("i", { style: `background:${css(groupOf(c)[2])}` }), SHORT_CAUSE[c] || c),
-        el("span", { class: "rb" }, el("i", { style: `width:${Math.max(4, Math.round((100 * n) / topCause))}%; background:${css(groupOf(c)[2])}` })),
-        el("span", { class: "rv", text: `${plural(n, "day")} · ${pctText(n, lost.length)}` }))))) : null;
     const sub = isProv ? `Province · ${p.region}` : `${p.kind} · ${p.province}, ${p.region}${p.independent && p.province !== "Metro Manila" ? " · independent city" : ""}`;
     $("#town-result").replaceChildren(el("div", { class: "town" },
       el("div", { class: "town-head" }, el("h3", { text: p.name }), el("p", { text: sub })),
       el("div", { class: "town-tiles" },
-        dayTile(today, "Today"), dayTile(addDays(today, 1), "Tomorrow"),
+        dayTile(p, live, today, "Today"), dayTile(p, live, addDays(today, 1), "Tomorrow"),
         el("div", { class: "tile" }, el("p", { class: "k", text: "School days lost" }), el("p", { class: "v big", text: pctText(lost.length, total) }),
-          el("p", { class: "s", text: `${lost.length} of ${fmt(total)} school days, ${state.searchYear === "all" ? `since Jan ${YEARS[0]}` : yearLabel(state.searchYear)}` }))),
-      reasons,
+          el("p", { class: "s", text: `${lost.length} of ${fmt(total)} school days, ${sinceText(state.searchYear)}` }))),
+      reasonsBlock(causes, lost),
       dates.length
         ? el("div", {}, el("p", { class: "list-title", text: `${plural(allDates.length, "day", "days")} with class suspensions${allDates.length > dates.length ? ` · latest ${dates.length}` : ""}` }),
           ...[...months].flatMap(([m, ds]) => [el("p", { class: "group-label", text: `${MONTH_FULL[+m.slice(5) - 1]} ${m.slice(0, 4)}` }), el("ul", { class: "list" }, ...ds.map(row))]),
@@ -710,6 +798,7 @@
     }
     renderByDate();
     if (state.town) renderTown();
+    if (picked) renderPanel();
   }
 
   // ── Check now: start a news check and wait for it ─────────────────────────

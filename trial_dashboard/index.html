@@ -34,12 +34,15 @@
     <div class="card-head row">
       <div>
         <h2 id="map-title">Class suspensions across the country</h2>
-        <p class="muted" id="map-sub">Each province's share of school days lost. Darker means more.</p>
+        <p class="muted" id="map-sub">Each province's share of school days lost. Darker means more. Click a province for its figures.</p>
       </div>
     </div>
     <div class="map-wrap">
       <div class="map" id="map" role="img" aria-label="Map of the Philippines: each province coloured by its share of school days lost to class suspensions"></div>
       <div class="map-controls" aria-label="Map controls">
+        <button type="button" class="map-btn" id="map-full" aria-pressed="false" aria-label="Expand the map to full screen">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 8V3h5M17 8V3h-5M3 12v5h5M17 12v5h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
         <button type="button" class="map-btn" id="map-in" aria-label="Zoom in">+</button>
         <button type="button" class="map-btn" id="map-out" aria-label="Zoom out">−</button>
         <button type="button" class="map-btn" id="map-reset" aria-label="Reset the view">
@@ -47,7 +50,8 @@
         </button>
       </div>
       <div class="map-tip" id="map-tip" hidden></div>
-      <p class="map-hint" id="map-hint">Drag to move · pinch or +/− to zoom</p>
+      <section class="map-panel" id="map-panel" aria-live="polite" hidden></section>
+      <p class="map-hint" id="map-hint">Drag to move · pinch or +/− to zoom · click a province</p>
     </div>
     <div class="map-legend" id="map-legend"></div>
   </section>
@@ -111,6 +115,7 @@
         <h3>Sources and limits</h3>
         <p>Past days come from Rappler's daily <i>#WalangPasok</i> roundups, checked against the official PSGC list of places. Rappler's lists miss many single-town suspensions, so the counts are a <b>lower bound</b>. Coming days are checked every morning, or on demand, from PNA, DepEd and GMA (read by AI, which quotes the article) and Rappler (read without AI, as Rappler asks).</p>
         <p><b>Confidence</b> (1–5): 5 = three or more outlets, or PNA/DepEd plus another; 4 = two outlets, or PNA/DepEd alone; 3 = one outlet; one point less for each missing detail. Past days come from Rappler alone, so they score 3 at most.</p>
+        <p><b>Map</b>: province boundaries from <a href="https://www.geoboundaries.org" target="_blank" rel="noopener">geoBoundaries</a> (NAMRIA, PSA, OCHA; CC BY 3.0 IGO) for Luzon and the Visayas, and <a href="https://github.com/faeldon/philippines-json-maps" target="_blank" rel="noopener">philippines-json-maps</a> (PSA 2023; MIT) for Mindanao, which has the newer provinces.</p>
       </div>
     </div>
   </section>
