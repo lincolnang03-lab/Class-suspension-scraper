@@ -832,6 +832,72 @@
   });
   callRefresh("GET").then((s) => { if (s.state === "running") waitForCheck(); }).catch(() => {});
 
+  // ── Cost tracker: what the Claude API has cost, by day and all time (costs.json, from costs.py) ──
+  const MODEL_NAME = { "claude-haiku-5-5": "Haiku 5.5", "claude-sonnet-5-5": "Sonnet 5.5", "claude-opus-5-5": "Opus 5.5" };
+  const JOB_NAME = { "live scheduled": "Daily check", "live manual": "Check now", "live local": "Test check", live: "News check",
+    trial: "Trial run", accuracy: "Accuracy check" };
+  const money = (n) => (n === 0 ? "$0.00" : n < 0.01 ? "under $0.01" : `$${n.toFixed(2)}`);
+  // One day's jobs in words: "Daily check ($0.03), Check now ($0.01)"; trial runs name the months of news they tested
+  function jobsText(byJob) {
+    const groups = new Map();
+    Object.entries(byJob).forEach(([j, v]) => {
+      const [kind, ym] = j.split(" ");
+      const name = JOB_NAME[j] || JOB_NAME[kind] || kind;
+      if (!groups.has(name)) groups.set(name, { usd: 0, months: [] });
+      const g = groups.get(name);
+      g.usd += v;
+      if (/^\d{4}-\d{2}$/.test(ym || "")) g.months.push(ym);
+    });
+    const list = [...groups].sort((a, b) => b[1].usd - a[1].usd);
+    return list.map(([name, g]) => {
+      const ms = g.months.sort();
+      const years = unique(ms.map((m) => m.slice(0, 4)));
+      const on = ms.length ? ` on ${years.map((y) => `${ms.filter((m) => m.startsWith(y)).map((m) => MON[+m.slice(5) - 1]).join(", ")} ${y}`).join("; ")} news` : "";
+      return `${name}${on}${list.length > 1 ? ` (${money(g.usd)})` : ""}`;
+    }).join(", ");
+  }
+  let costAll = false;
+  function renderCosts(c) {
+    if (!c) { $("#cost-sub").textContent = "The cost summary couldn't be loaded."; return; }
+    const today = phToday();
+    const days = c.days || [];
+    const since = addDays(today, -29);
+    const last30 = days.filter((d) => d.date >= since);
+    const todayRow = days.find((d) => d.date === today);
+    const kpi = (v, l, s) => el("div", { class: "kpi" }, el("p", { class: "v", text: v }), el("p", { class: "l", text: l }), el("p", { class: "s", text: s }));
+    $("#cost-sub").textContent = days.length
+      ? `Every Claude call, priced by its tokens. Last API use: ${dayLabel(days[0].date, { month: "short", day: "numeric", year: "numeric" })}. Days with no API use aren't listed.`
+      : "No API calls recorded yet.";
+    $("#cost-kpis").replaceChildren(
+      kpi(money(c.total_usd), "All time", `${plural(c.calls, "API call")} on ${plural(days.length, "day")}`),
+      kpi(money(todayRow ? todayRow.usd : 0), "Today", `${dayLabel(today, { weekday: "short", month: "short", day: "numeric" })}, Philippine time${todayRow ? ` · ${plural(todayRow.calls, "call")}` : ""}`),
+      kpi(money(last30.reduce((s, d) => s + d.usd, 0)), "Last 30 days", plural(last30.length, "day with API use", "days with API use")));
+    const head = el("thead", {}, el("tr", {}, ...["Date", "What ran", "Calls", "Tokens in / out", "Cost"].map((t, i) =>
+      el("th", { scope: "col", class: i >= 2 ? "num" : "", text: t }))));
+    const N = 14;
+    const rows = (costAll ? days : days.slice(0, N)).map((d) => el("tr", {},
+      el("td", { class: "cost-date" }, dayLabel(d.date, { weekday: "short", month: "short", day: "numeric", year: "numeric" }),
+        d.estimated ? el("span", { class: "sub", text: "estimated from saved token counts" }) : null),
+      el("td", {}, jobsText(d.by_job),
+        el("span", { class: "sub", text: Object.keys(d.by_model).map((m) => MODEL_NAME[m] || m).join(", ") })),
+      el("td", { class: "num c-calls", text: fmt(d.calls) }),
+      el("td", { class: "num c-tok", text: `${fmt(d.input_tokens)} / ${fmt(d.output_tokens)}` }),
+      el("td", { class: "num cost-usd", text: money(d.usd) })));
+    const foot = el("tfoot", {}, el("tr", {},
+      el("th", { scope: "row", colspan: "2", text: "All time" }),
+      el("td", { class: "num c-calls", text: fmt(c.calls) }),
+      el("td", { class: "num c-tok", text: `${fmt(days.reduce((s, d) => s + d.input_tokens, 0))} / ${fmt(days.reduce((s, d) => s + d.output_tokens, 0))}` }),
+      el("td", { class: "num cost-usd", text: money(c.total_usd) })));
+    $("#t-cost").replaceChildren(head, el("tbody", {}, ...(rows.length ? rows
+      : [el("tr", {}, el("td", { colspan: "5", class: "empty-cell", text: "Nothing spent yet." }))])), foot);
+    const prices = Object.entries(c.prices || {}).map(([m, p]) => `${MODEL_NAME[m] || m} $${p.input.toFixed(2)} / $${p.output.toFixed(2)}`).join(" · ");
+    const more = days.length > N ? el("button", { type: "button", class: "btn small", text: costAll ? "Show fewer days" : `Show all ${days.length} days` }) : null;
+    if (more) more.addEventListener("click", () => { costAll = !costAll; renderCosts(c); });
+    $("#cost-note").replaceChildren(more || "", more ? el("br") : "",
+      `Prices per million tokens, in / out: ${prices}. Rappler is read without AI, so it costs nothing. Updated after every check.`);
+  }
+  getJSON(`costs.json?t=${Date.now()}`).then(renderCosts).catch(() => renderCosts(null));
+
   // ── CSV ───────────────────────────────────────────────────────────────────
   function downloadCsv(name, rows) {
     if (!rows.length) return;

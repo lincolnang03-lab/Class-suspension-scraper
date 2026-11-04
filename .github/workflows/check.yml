@@ -61,5 +61,6 @@ jobs:
           VERCEL_PROJECT_ID: prj_FQNAnyeEwbHUrp0eFNvR668jsp3q
         run: |
           cp ../live/data.json data.json
+          python ../costs.py site       # the Cost tracker: spending by day and all time
           npx --yes vercel@65.0.0 deploy --prod --yes --token "$VERCEL_TOKEN" > /dev/null
           echo "Site updated"

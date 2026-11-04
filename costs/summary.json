@@ -1,0 +1,21 @@
+{
+ "total_usd": 9.860496,
+ "months": {
+  "2026-10": {
+   "usd": 9.860496,
+   "calls": 601,
+   "by_model": {
+    "claude-opus-5-5": {
+     "usd": 9.860496,
+     "calls": 601,
+     "input_tokens": 1703229,
+     "output_tokens": 152379
+    }
+   },
+   "by_job": {
+    "trial": 9.860496
+   }
+  }
+ },
+ "updated": "2026-10-14T07:00:26+00:00"
+}

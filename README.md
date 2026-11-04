@@ -44,8 +44,10 @@ costs money).
 ## API costs
 
 Every Claude call is logged with its model, tokens and price in `costs/api_costs.jsonl`, with
-totals by month, model and job in `costs/summary.json`. `python costs.py` prints them. Costs are
-never shown on the site. Rough prices: Haiku $0.10 / $0.50 per million tokens in / out,
+totals by month, model and job in `costs/summary.json`. `python costs.py` prints them, and
+`python costs.py site` writes the daily and all-time totals the dashboard's **Cost tracker** shows
+(the workflow does this before each deploy). The October 2026 trial runs predate the log; their cost
+was rebuilt from the token counts saved with each read (`python costs.py backfill`). Rough prices: Haiku $0.10 / $0.50 per million tokens in / out,
 Sonnet $2 / $10.
 
 ## Past data

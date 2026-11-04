@@ -1,19 +1,24 @@
 """
 API cost log. Every Claude call's tokens and price are appended to costs/api_costs.jsonl, and
-costs/summary.json keeps running totals by month, model and job. Never shown on the site.
+costs/summary.json keeps running totals by month, model and job. The dashboard's Cost tracker shows
+the totals by day (trial_dashboard/costs.json, written by `site`; never the log itself).
 
-    python costs.py          # print the totals
+    python costs.py            # print the totals
+    python costs.py site       # -> trial_dashboard/costs.json, for the dashboard
+    python costs.py backfill   # once: add the 2024 trial runs, which ran before this log existed
 """
 
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).parent
 DIR = ROOT / "costs"
 LOG = DIR / "api_costs.jsonl"
 SUMMARY = DIR / "summary.json"
+SITE = ROOT / "trial_dashboard" / "costs.json"
+MANILA = timezone(timedelta(hours=8))
 
 # USD per million tokens (input, output). Haiku 5.5's price is for prompts of 100K tokens or fewer;
 # articles are cut at 60,000 characters, far below that.
@@ -47,12 +52,12 @@ def total_usd(usage) -> float:
     return sum(c.get("usd", usd(c["model"], c["input_tokens"], c["output_tokens"])) for c in usage)
 
 
-def record(job: str, calls: list):
+def record(job: str, calls: list, when: datetime = None):
     """Append calls (each from usage_of) under a job name, and update the totals."""
     calls = [c for c in calls if c]
     if not calls:
         return
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    now = (when or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat(timespec="seconds")
     DIR.mkdir(exist_ok=True)
     with LOG.open("a", encoding="utf-8") as f:
         for c in calls:
@@ -74,7 +79,63 @@ def record(job: str, calls: list):
     SUMMARY.write_text(json.dumps(s, indent=1), encoding="utf-8")
 
 
+def write_site():
+    """Totals by day (Philippine time) and all time, for the dashboard's Cost tracker."""
+    days = {}
+    if LOG.exists():
+        for line in LOG.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            c = json.loads(line)
+            d = datetime.fromisoformat(c["time"]).astimezone(MANILA).date().isoformat()
+            day = days.setdefault(d, {"date": d, "usd": 0, "calls": 0, "input_tokens": 0, "output_tokens": 0,
+                                      "by_model": {}, "by_job": {}, "estimated": False})
+            day["usd"] += c["usd"]
+            day["calls"] += 1
+            day["input_tokens"] += c["input_tokens"]
+            day["output_tokens"] += c["output_tokens"]
+            day["by_model"][c["model"]] = day["by_model"].get(c["model"], 0) + c["usd"]
+            day["by_job"][c["job"]] = day["by_job"].get(c["job"], 0) + c["usd"]
+            day["estimated"] = day["estimated"] or bool(c.get("estimated"))
+    for day in days.values():
+        day["usd"] = round(day["usd"], 4)
+        day["by_model"] = {k: round(v, 4) for k, v in day["by_model"].items()}
+        day["by_job"] = {k: round(v, 4) for k, v in day["by_job"].items()}
+    out = {
+        "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "total_usd": round(sum(d["usd"] for d in days.values()), 4),
+        "calls": sum(d["calls"] for d in days.values()),
+        "prices": {m: {"input": p[0], "output": p[1]} for m, p in PRICES.items()},
+        "days": sorted(days.values(), key=lambda d: d["date"], reverse=True),
+    }
+    SITE.write_text(json.dumps(out, indent=1), encoding="utf-8")
+    print(f"{len(days)} days, ${out['total_usd']:.2f} all time -> {SITE}")
+
+
+def backfill():
+    """The 2024 trial runs read articles with Opus before this log existed. Their token counts were saved
+    with each read (trial/YYYY-MM/scan.jsonl), so their cost is rebuilt from those, dated by the file."""
+    if LOG.exists() and any(json.loads(l).get("estimated") for l in LOG.read_text(encoding="utf-8").splitlines() if l.strip()):
+        sys.exit("Already added.")
+    for path in sorted((ROOT / "trial").glob("*/scan.jsonl")):
+        calls = []
+        for line in path.read_text(encoding="utf-8-sig").splitlines():
+            u = json.loads(line).get("usage") if line.strip() else None
+            if isinstance(u, dict):     # older Opus-only reads: one {input_tokens, output_tokens}
+                calls.append({"model": "claude-opus-5-5", "input_tokens": u.get("input_tokens", 0),
+                              "output_tokens": u.get("output_tokens", 0), "usd": round(total_usd(u), 6), "estimated": True})
+            elif isinstance(u, list):
+                calls += [{**c, "estimated": True} for c in u]
+        if calls:
+            record(f"trial {path.parent.name}", calls, when=datetime.fromtimestamp(path.stat().st_mtime, timezone.utc))
+            print(f"{path.parent.name}: {len(calls)} calls, ${sum(c['usd'] for c in calls):.2f}")
+
+
 if __name__ == "__main__":
+    if sys.argv[1:] == ["site"]:
+        sys.exit(write_site())
+    if sys.argv[1:] == ["backfill"]:
+        sys.exit(backfill())
     if not SUMMARY.exists():
         sys.exit("No API calls recorded yet.")
     s = json.loads(SUMMARY.read_text(encoding="utf-8"))

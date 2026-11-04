@@ -19,6 +19,7 @@ API costs go to costs/, never into data.json, which the site loads.
 import concurrent.futures as cf
 import hashlib
 import json
+import os
 import re
 import sys
 from datetime import datetime, timedelta, timezone
@@ -148,6 +149,8 @@ def cmd_run():
         a["text_hash"] = text_hash(a.get("text") or "")
     to_read = [a for a in to_read if a.get("text")]
     read_ok, spent = 0, 0.0
+    # The Cost tracker tells the daily check apart from the dashboard's Check now button
+    job = "live " + {"schedule": "scheduled", "workflow_dispatch": "manual"}.get(os.environ.get("GITHUB_EVENT_NAME", ""), "local")
     if to_read:
         client = reader.make_client()
 
@@ -159,7 +162,7 @@ def cmd_run():
 
         with cf.ThreadPoolExecutor(4) as ex:
             for a, res in ex.map(work, to_read):
-                costs.record("live", res.get("usage") or [])
+                costs.record(job, res.get("usage") or [])
                 spent += costs.total_usd(res.get("usage"))
                 if "result" in res:
                     read_ok += 1

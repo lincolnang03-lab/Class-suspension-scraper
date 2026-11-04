@@ -399,3 +399,28 @@ select {
 /* A place is picked: hide the country-wide day totals (tapping one of its days brings that day's list back) */
 .bydate.searching .now-days, .bydate.searching #now-banner,
 .bydate.searching:not(.show-day) .date-row, .bydate.searching:not(.show-day) .table-wrap { display: none; }
+
+/* ── Cost tracker ───────────────────────────────────────────────────────── */
+.cost-kpis { margin-bottom: 18px; }
+.cost-kpis .kpi { background: var(--fill); box-shadow: none; }
+.cost-kpis .kpi:first-child .v { color: var(--ink); }
+.cost-tbl .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cost-tbl .cost-date { font-weight: 600; white-space: nowrap; }
+.cost-tbl .cost-date .sub { white-space: normal; }
+.cost-tbl .cost-usd { font-weight: 650; }
+.cost-tbl tfoot th, .cost-tbl tfoot td { font-weight: 700; border-top: 1px solid rgba(0, 0, 0, 0.14); border-bottom: 0; }
+.cost-tbl .empty-cell { text-align: center; color: var(--muted); padding: 32px; }
+.cost-note { margin: 14px 0 0; font-size: 0.8125rem; }
+.cost-note .btn { margin: 0 0 12px; }
+@media (max-width: 640px) {
+  /* Phones: each day is date and cost, then what ran; calls and tokens stay in the wider layout */
+  .cost-tbl thead { display: none; }
+  .cost-tbl, .cost-tbl tbody, .cost-tbl tfoot { display: block; }
+  .cost-tbl tr { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 12px 0; border-bottom: 1px solid var(--hairline); }
+  .cost-tbl td, .cost-tbl th, .cost-tbl tfoot th, .cost-tbl tfoot td { border: 0; padding: 0; }
+  .cost-tbl .c-calls, .cost-tbl .c-tok { display: none; }
+  .cost-tbl tbody td:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+  .cost-tbl tr > :last-child { grid-column: 2; grid-row: 1; }
+  .cost-tbl tfoot tr { border-bottom: 0; }
+  .cost-kpis .kpi:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
