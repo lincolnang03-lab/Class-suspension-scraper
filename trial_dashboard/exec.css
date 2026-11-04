@@ -193,7 +193,8 @@ select {
 .more-btn { margin-top: 12px; }
 
 /* ── Breakdown: every place, by date ────────────────────────────────────── */
-.search-help { margin: 0 0 10px; font-size: 0.9375rem; }
+.search-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; margin: 0 0 10px; }
+.search-help { margin: 0; font-size: 0.9375rem; flex: 1 1 320px; }
 #town-result:not(:empty) { margin-bottom: 8px; }
 .bydate .search + #town-result + .now-days, .bydate #town-result + .now-days { margin-top: 20px; }
 .check-status { margin: -4px 0 14px; font-size: 0.9375rem; color: var(--accent); }

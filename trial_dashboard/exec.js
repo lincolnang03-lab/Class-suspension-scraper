@@ -55,7 +55,7 @@
   };
 
   const params = new URLSearchParams(location.search);
-  const state = { year: "all", region: "", date: "", town: null, townAll: false };
+  const state = { year: "all", searchYear: "all", region: "", date: "", town: null, townAll: false };
   let H = null, LIVE = null, RECS = [], YEARS = [], PLACES = [], SEARCH = [], uniqueNames = new Set();
   let HOLIDAYS = new Set(), BREAKS = [];
 
@@ -105,14 +105,14 @@
     return wd !== 0 && wd !== 6 && !HOLIDAYS.has(iso) && !BREAKS.some(([a, b]) => iso >= a && iso <= b);
   }
   const lastDate = () => H.covered[H.covered.length - 1][1];
-  function periodRange() {
-    if (state.year === "all") return [H.covered[0][0], lastDate()];
-    const end = `${state.year}-12-31`;
-    return [`${state.year}-01-01`, end < lastDate() ? end : lastDate()];
+  function periodRange(year = state.year) {
+    if (year === "all") return [H.covered[0][0], lastDate()];
+    const end = `${year}-12-31`;
+    return [`${year}-01-01`, end < lastDate() ? end : lastDate()];
   }
   const schoolDayCache = new Map();
-  function schoolDays() {
-    const [a, b] = periodRange();
+  function schoolDays(year = state.year) {
+    const [a, b] = periodRange(year);
     const key = `${a}|${b}`;
     if (!schoolDayCache.has(key)) {
       let n = 0;
@@ -255,7 +255,7 @@
     tip.style.transform = `translate(${Math.max(8, x)}px, ${y}px)`;
   }
 
-  // Hover: a dark outline and a deeper shade on the province, a lighter outline round its region
+  // Hover: a dark outline and a deeper shade on the province under the pointer (and nothing else)
   let hovered = null, baseLayer = null;
   const darker = (c, k = 0.82) => c.map((v, i) => (i < 3 ? Math.round(v * k) : v));
   function hover(f) {
@@ -265,11 +265,9 @@
   }
   function highlightLayers() {
     if (!hovered) return [];
-    const region = GEO.features.filter((g) => g.properties.region === hovered.properties.region);
+    const shapes = (baseLayer ? baseLayer.props.data : GEO.features).filter((g) => g.properties.name === hovered.properties.name);
     return [
-      new deck.GeoJsonLayer({ id: "hover-region", data: region, filled: false, stroked: true,
-        getLineColor: [29, 29, 31, 170], lineWidthUnits: "pixels", getLineWidth: 1.5 }),
-      new deck.GeoJsonLayer({ id: "hover-province", data: [hovered], filled: true, stroked: true,
+      new deck.GeoJsonLayer({ id: "hover-province", data: shapes, filled: true, stroked: true,
         getFillColor: darker(hovered.__fill || [200, 200, 200, 255]), getLineColor: [29, 29, 31, 255],
         lineWidthUnits: "pixels", getLineWidth: 2.5 }),
     ];
@@ -412,12 +410,13 @@
     if (r.scope === "region") return r.region === p.region;
     return r.scope === "national";
   }
-  // Totals for one place in the selected period
+  // Totals for one place, for the year picked next to the search box
   function summary(p) {
-    const [a, b] = periodRange();
+    const y = state.searchYear;
+    const [a, b] = periodRange(y);
     const hits = RECS.filter((r) => r.date >= a && r.date <= b && covers(r, p));
     const lost = lostDays(hits);
-    return { hits, lost, total: schoolDays(), causes: [...countBy(lost, (d) => H.days[d].cause)].sort((x, y) => y[1] - x[1]) };
+    return { hits, lost, total: schoolDays(y), causes: [...countBy(lost, (d) => H.days[d].cause)].sort((x, y) => y[1] - x[1]) };
   }
 
   // Search: a combobox with a custom results list (keyboard: ↑ ↓ Enter Esc)
@@ -425,6 +424,12 @@
   let matches = [], active = -1;
   function bindSearch() {
     const input = $("#town"), list = $("#town-options");
+    const drawYear = () => seg($("#f-search-year"), [["all", "All time"], ...YEARS.map((y) => [y, yearLabel(y)])], state.searchYear, (v) => {
+      state.searchYear = v; state.townAll = false; drawYear();
+      renderTown();
+      if (!list.hidden) input.dispatchEvent(new Event("input"));   // refresh the totals in an open list
+    });
+    drawYear();
     const open = (on) => { list.hidden = !on; input.setAttribute("aria-expanded", String(on)); if (!on) input.removeAttribute("aria-activedescendant"); };
     const choose = (p) => { state.town = p; state.townAll = false; input.value = p.label; open(false); $(".bydate").classList.remove("show-day"); renderTown(); };
     const paint = () => {
@@ -532,7 +537,7 @@
       el("div", { class: "town-tiles" },
         dayTile(today, "Today"), dayTile(addDays(today, 1), "Tomorrow"),
         el("div", { class: "tile" }, el("p", { class: "k", text: "School days lost" }), el("p", { class: "v big", text: pctText(lost.length, total) }),
-          el("p", { class: "s", text: `${lost.length} of ${fmt(total)} school days, ${state.year === "all" ? "since Jan 2025" : yearLabel(state.year)}` }))),
+          el("p", { class: "s", text: `${lost.length} of ${fmt(total)} school days, ${state.searchYear === "all" ? `since Jan ${YEARS[0]}` : yearLabel(state.searchYear)}` }))),
       reasons,
       dates.length
         ? el("div", {}, el("p", { class: "list-title", text: `${plural(allDates.length, "day", "days")} with class suspensions${allDates.length > dates.length ? ` · latest ${dates.length}` : ""}` }),

@@ -71,7 +71,10 @@
       <button type="button" class="btn primary" id="check-now">Check now</button>
     </div>
     <p class="check-status" id="check-status" aria-live="polite" hidden></p>
-    <p class="muted search-help" id="town-help">Search a city, municipality or province to see today and tomorrow, its school days lost and why.</p>
+    <div class="search-head">
+      <p class="muted search-help" id="town-help">Search a city, municipality or province to see today and tomorrow, its school days lost and why.</p>
+      <div class="seg small" id="f-search-year" role="group" aria-label="Year for the search"></div>
+    </div>
     <div class="search" id="town-box">
       <svg class="search-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.75" fill="none" stroke="currentColor" stroke-width="2"/><path d="M13 13l4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       <label for="town" class="visually-hidden">City or town</label>
