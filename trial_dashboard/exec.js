@@ -195,21 +195,17 @@
     return rgb(STOPS[STOPS.length - 1][1]);
   }
   const PH_BOUNDS = [[116.9, 4.5], [126.7, 21.2]];
-  // Region labels: [name, short code, centre (lon, lat), side of the callout column, label latitude]
-  // The columns sit in the sea either side of the islands so names never sit on top of each other.
+  // Region labels, shown only once the map is zoomed in: [name, centre (lon, lat), priority]
   const REGION_LABELS = [
-    ["CAR", "CAR", [121.06, 17.35], "w", 18.2], ["Ilocos Region", "I", [120.49, 16.91], "w", 17.2],
-    ["Central Luzon", "III", [120.82, 15.39], "w", 15.4], ["NCR", "NCR", [121.03, 14.61], "w", 14.4],
-    ["MIMAROPA", "IV-B", [118.95, 10.05], "w", 11.6], ["Western Visayas", "VI", [122.44, 11.17], "w", 10.6],
-    ["Negros Island Region", "NIR", [123.02, 10.01], "w", 9.6], ["Zamboanga Peninsula", "IX", [122.69, 7.66], "w", 7.7],
-    ["BARMM", "BARMM", [124.3, 7.6], "w", 6.8],
-    ["Cagayan Valley", "II", [121.73, 17.20], "e", 17.2], ["CALABARZON", "IV-A", [121.57, 14.16], "e", 14.2],
-    ["Bicol Region", "V", [123.47, 13.27], "e", 13.2], ["Eastern Visayas", "VIII", [124.95, 11.54], "e", 11.5],
-    ["Central Visayas", "VII", [123.95, 10.13], "e", 10.4], ["Caraga", "XIII", [125.79, 8.81], "e", 9.0],
-    ["Northern Mindanao", "X", [124.67, 8.19], "e", 8.1], ["Davao Region", "XI", [125.83, 7.21], "e", 7.2],
-    ["SOCCSKSARGEN", "XII", [124.82, 6.58], "e", 6.3],
+    ["CAR", [121.06, 17.35]], ["Ilocos Region", [120.49, 16.91]], ["Cagayan Valley", [121.73, 17.20]],
+    ["Central Luzon", [120.82, 15.39]], ["NCR", [121.03, 14.61]], ["CALABARZON", [121.57, 14.16]],
+    ["MIMAROPA", [118.95, 10.05]], ["Bicol Region", [123.47, 13.27]], ["Western Visayas", [122.44, 11.17]],
+    ["Negros Island Region", [123.02, 10.01]], ["Central Visayas", [124.2, 9.85]], ["Eastern Visayas", [124.95, 11.54]],
+    ["Zamboanga Peninsula", [122.69, 7.66]], ["Northern Mindanao", [124.67, 8.19]], ["Caraga", [125.79, 8.81]],
+    ["Davao Region", [125.83, 7.21]], ["BARMM", [124.3, 7.6]], ["SOCCSKSARGEN", [124.82, 6.58]],
   ];
-  const COLUMN_X = { w: 116.3, e: 127.3 };
+  const LABEL_ZOOM_IN = 0.7;   // labels appear this far past the full-country view
+  let labelsOn = false;
   let lastMapRs = [];
   function homeView() {
     const box = $("#map");
@@ -217,8 +213,17 @@
     const fit = vp.fitBounds(PH_BOUNDS, { padding: 24 });
     return { longitude: fit.longitude, latitude: fit.latitude, zoom: fit.zoom, pitch: 0, bearing: 0, minZoom: fit.zoom - 0.5, maxZoom: 11 };
   }
+  function syncLabels(zoom) {
+    const on = zoom > homeView().zoom + LABEL_ZOOM_IN;
+    if (on !== labelsOn) { labelsOn = on; renderMap(lastMapRs); }
+  }
+  let flying = false;
   function flyTo(view) {
-    MAP.setProps({ initialViewState: { ...view, transitionDuration: reduceMotion ? 0 : 900,
+    currentView = view;          // buttons and resets animate the map; track where it's going, not where it is
+    syncLabels(view.zoom);
+    flying = !reduceMotion && view.transitionDuration !== 0;
+    MAP.setProps({ initialViewState: { ...view, transitionDuration: reduceMotion ? 0 : (view.transitionDuration ?? 900),
+      onTransitionEnd: () => { flying = false; },
       transitionInterpolator: new deck.LinearInterpolator(["longitude", "latitude", "zoom"]),
       transitionEasing: (t) => 1 - Math.pow(1 - t, 3) } });
   }
@@ -235,7 +240,11 @@
       // A flat map: pan and zoom only. Pinch, double-click or the buttons zoom; page scrolling is never captured
       controller: { scrollZoom: false, inertia: reduceMotion ? 0 : 350, dragRotate: false, touchRotate: false, keyboard: true },
       parameters: { clearColor: [0, 0, 0, 0] },
-      onViewStateChange: ({ viewState }) => { currentView = viewState; },
+      onViewStateChange: ({ viewState }) => {
+        if (flying) return;       // mid-animation frames report the old zoom; the target is already set
+        currentView = viewState;
+        syncLabels(viewState.zoom);
+      },
       onHover: (info) => showTip(info),
       onClick: (info) => showTip(info),
       getCursor: ({ isDragging, isHovering }) => (isDragging ? "grabbing" : isHovering ? "pointer" : "grab"),
@@ -267,28 +276,18 @@
   }
 
   function regionLayers() {
-    const wide = $("#map").clientWidth > 640;
+    if (!labelsOn) return [];
     const dim = (name) => state.region && state.region !== name;
-    const ink = (name) => (dim(name) ? [142, 142, 147, 255] : [29, 29, 31, 255]);
-    const text = { fontFamily: css("--font-body"), fontWeight: 600, characterSet: "auto", sizeUnits: "pixels",
-      fontSettings: { sdf: true }, outlineWidth: 4, outlineColor: [255, 255, 255, 235], getColor: (d) => ink(d[0]),
-      updateTriggers: { getColor: state.region } };
-    if (!wide) {
-      // Phones: short codes on the regions themselves
-      return [new deck.TextLayer({ id: "region-codes", data: REGION_LABELS, getPosition: (d) => d[2], getText: (d) => d[1],
-        getSize: 11, getTextAnchor: "middle", getAlignmentBaseline: "center", ...text })];
-    }
-    const from = (d) => [COLUMN_X[d[3]] + (d[3] === "w" ? 0.25 : -0.25), d[4]];
-    return [
-      new deck.LineLayer({ id: "region-leaders", data: REGION_LABELS, getSourcePosition: from, getTargetPosition: (d) => d[2],
-        getColor: (d) => (dim(d[0]) ? [174, 174, 178, 110] : [110, 110, 115, 160]), getWidth: 1, widthUnits: "pixels",
-        updateTriggers: { getColor: state.region } }),
-      new deck.ScatterplotLayer({ id: "region-dots", data: REGION_LABELS, getPosition: (d) => d[2], radiusUnits: "pixels",
-        getRadius: 2.5, getFillColor: (d) => ink(d[0]), stroked: true, getLineColor: [255, 255, 255, 255], lineWidthUnits: "pixels",
-        getLineWidth: 1, updateTriggers: { getFillColor: state.region } }),
-      new deck.TextLayer({ id: "region-names", data: REGION_LABELS, getPosition: (d) => [COLUMN_X[d[3]], d[4]], getText: (d) => d[0],
-        getSize: 12.5, getTextAnchor: (d) => (d[3] === "w" ? "end" : "start"), getAlignmentBaseline: "center", ...text }),
-    ];
+    return [new deck.TextLayer({
+      id: "region-names", data: REGION_LABELS, getPosition: (d) => d[1], getText: (d) => d[0],
+      fontFamily: css("--font-body"), fontWeight: 600, characterSet: "auto", sizeUnits: "pixels", getSize: 13,
+      getTextAnchor: "middle", getAlignmentBaseline: "center",
+      fontSettings: { sdf: true }, outlineWidth: 4, outlineColor: [255, 255, 255, 235],
+      getColor: (d) => (dim(d[0]) ? [142, 142, 147, 255] : [29, 29, 31, 255]), updateTriggers: { getColor: state.region },
+      // names that would overlap wait until you zoom in further
+      extensions: [new deck.CollisionFilterExtension()], collisionTestProps: { sizeScale: 1.15 },
+      transitions: reduceMotion ? {} : { getColor: 200 },
+    })];
   }
 
   function renderMap(rs) {
