@@ -514,7 +514,7 @@
   function bindSearch() {
     const input = $("#town"), list = $("#town-options");
     const open = (on) => { list.hidden = !on; input.setAttribute("aria-expanded", String(on)); if (!on) input.removeAttribute("aria-activedescendant"); };
-    const choose = (p) => { state.town = p; state.townAll = false; input.value = p.label; open(false); renderTown(); };
+    const choose = (p) => { state.town = p; state.townAll = false; input.value = p.label; open(false); $(".bydate").classList.remove("show-day"); renderTown(); };
     const paint = () => {
       const q = norm(input.value.trim());
       list.replaceChildren(...(matches.length ? matches.map((p, i) => {
@@ -559,7 +559,10 @@
   function renderTown() {
     const p = state.town;
     try { const u = new URL(location.href); p ? u.searchParams.set("town", p.label) : u.searchParams.delete("town"); history.replaceState(null, "", u); } catch { /* sandboxed */ }
-    if (!p) { $("#town-result").replaceChildren(); state.townAll = false; return; }
+    // While a place is picked, the card is about that place: the country-wide day totals step aside
+    const card = $(".bydate");
+    card.classList.toggle("searching", Boolean(p));
+    if (!p) { $("#town-result").replaceChildren(); state.townAll = false; card.classList.remove("show-day"); return; }
     const isProv = p.kind === "Province";
     const { hits, lost, total, causes } = summary(p);
     // One row per date. A town: its own announcement wins over a province-wide one. A province: count its LGUs.
@@ -597,7 +600,10 @@
         el("span", { class: "what" }, main, details.length ? el("small", { text: details.join(" · ") }) : null),
         el("span", { class: "tag", style: `--c: ${css(groupOf(cause)[2])}`, text: SHORT_CAUSE[cause] || cause }),
         chevron());
-      btn.addEventListener("click", () => { state.date = d; renderByDate(); $("#bydate-title").scrollIntoView({ behavior: "smooth", block: "start" }); });
+      btn.addEventListener("click", () => {
+        state.date = d; renderByDate(); card.classList.add("show-day");
+        $(".date-row").scrollIntoView({ behavior: "smooth", block: "start" });
+      });
       return el("li", {}, btn);
     };
     // Why school days were lost: days per cause, as bars

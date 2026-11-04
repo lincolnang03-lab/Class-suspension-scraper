@@ -337,3 +337,7 @@ select {
   .reason-list li { grid-template-columns: 1fr auto; }
   .reason-list .rb { grid-column: 1 / -1; grid-row: 2; }
 }
+
+/* A place is picked: hide the country-wide day totals (tapping one of its days brings that day's list back) */
+.bydate.searching .now-days, .bydate.searching #now-banner,
+.bydate.searching:not(.show-day) .date-row, .bydate.searching:not(.show-day) .table-wrap { display: none; }
