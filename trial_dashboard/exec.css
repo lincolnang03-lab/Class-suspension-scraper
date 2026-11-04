@@ -401,6 +401,16 @@ select {
 .bydate.searching:not(.show-day) .date-row, .bydate.searching:not(.show-day) .table-wrap { display: none; }
 
 /* ── Cost tracker ───────────────────────────────────────────────────────── */
+.cost-toggle {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; padding: 8px 16px;
+  border: 0; border-radius: 999px; background: var(--fill); color: var(--muted); font: 500 0.875rem var(--font-body); cursor: pointer;
+  transition: background-color 150ms var(--ease), color 150ms var(--ease);
+}
+.cost-toggle:hover { background: var(--fill-2); color: var(--ink); }
+.cost-toggle svg { width: 7px; height: 11px; overflow: visible; transition: transform 200ms var(--ease); }
+.cost-toggle[aria-expanded="true"] { color: var(--ink); }
+.cost-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+.cost-card:not([hidden]) { animation: fade-in 220ms var(--ease); }
 .cost-kpis { margin-bottom: 18px; }
 .cost-kpis .kpi { background: var(--fill); box-shadow: none; }
 .cost-kpis .kpi:first-child .v { color: var(--ink); }

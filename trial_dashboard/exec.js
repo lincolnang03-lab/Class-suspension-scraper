@@ -896,7 +896,19 @@
     $("#cost-note").replaceChildren(more || "", more ? el("br") : "",
       `Prices per million tokens, in / out: ${prices}. Rappler is read without AI, so it costs nothing. Updated after every check.`);
   }
-  getJSON(`costs.json?t=${Date.now()}`).then(renderCosts).catch(() => renderCosts(null));
+  // Hidden until someone opens it; the figures load on the first open
+  let costsLoaded = false;
+  $("#cost-tracker").addEventListener("click", (e) => {
+    const open = e.currentTarget.getAttribute("aria-expanded") !== "true";
+    e.currentTarget.setAttribute("aria-expanded", String(open));
+    $("#cost-panel").hidden = !open;
+    if (!open) return;
+    if (!costsLoaded) {
+      costsLoaded = true;
+      getJSON(`costs.json?t=${Date.now()}`).then(renderCosts).catch(() => renderCosts(null));
+    }
+    $("#cost-panel").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "nearest" });
+  });
 
   // ── CSV ───────────────────────────────────────────────────────────────────
   function downloadCsv(name, rows) {
