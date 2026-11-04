@@ -55,7 +55,7 @@
   };
 
   const params = new URLSearchParams(location.search);
-  const state = { year: "all", region: "", metric: "days", date: "", town: null, townAll: false };
+  const state = { year: "all", region: "", metric: "days", date: "", town: null, townAll: false, mapView: "3d" };
   let H = null, LIVE = null, RECS = [], YEARS = [], PLACES = [], uniqueNames = new Set();
   let HOLIDAYS = new Set(), BREAKS = [];
   const charts = {};
@@ -68,8 +68,10 @@
     return attempt(0);
   };
 
-  Promise.all([getJSON("history.json"), loadLive().catch(() => null), getJSON("places.json").catch(() => ({ places: [] }))])
-    .then(([h, live, places]) => {
+  Promise.all([getJSON("history.json"), loadLive().catch(() => null), getJSON("places.json").catch(() => ({ places: [] })),
+    getJSON("provinces.geojson").catch(() => null)])
+    .then(([h, live, places, geo]) => {
+      GEO = geo;
       H = h;
       LIVE = live;
       RECS = h.records.map(([date, region, province, city, scope, mask, sector, inPerson, partDay]) => ({
@@ -164,6 +166,7 @@
   function render() {
     const rs = filtered();
     renderKpis(rs);
+    renderMap(rs);
     renderFindings(rs);
     renderTimeline(rs);
     renderCauses(rs);
@@ -171,6 +174,123 @@
     renderBreakdownLive();
     $("#cal-count").textContent = `${fmt(schoolDays())} school days from ${period()}`;
     $("#footer").textContent = `Past data: ${fmt(RECS.length)} records on ${unique(RECS.map((r) => r.date)).length} days, to ${dayLabel(lastDate(), { month: "long", day: "numeric", year: "numeric" })}. Source: ${H.source}; coming days from the live news check.`;
+  }
+
+  // ── Overall: the 3D map ───────────────────────────────────────────────────
+  // Green (few) → yellow → red → dark red (most), by share of school days lost
+  let GEO = null, MAP = null, mapReady = false;
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const STOPS = [[0, "#cfeed7"], [0.12, "#34c759"], [0.38, "#ffd60a"], [0.62, "#ff9f0a"], [0.84, "#ff3b30"], [1, "#8a0f08"]];
+  const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  function heat(t) {
+    const x = Math.max(0, Math.min(1, t));
+    for (let i = 1; i < STOPS.length; i++) {
+      const [t1, c1] = STOPS[i];
+      if (x <= t1) {
+        const [t0, c0] = STOPS[i - 1];
+        const k = (x - t0) / (t1 - t0 || 1), a = rgb(c0), b = rgb(c1);
+        return a.map((v, j) => Math.round(v + (b[j] - v) * k));
+      }
+    }
+    return rgb(STOPS[STOPS.length - 1][1]);
+  }
+  const PH_BOUNDS = [[116.9, 4.5], [126.7, 21.2]];
+  function homeView() {
+    const box = $("#map");
+    const vp = new deck.WebMercatorViewport({ width: box.clientWidth || 800, height: box.clientHeight || 560 });
+    const fit = vp.fitBounds(PH_BOUNDS, { padding: 24 });
+    const flat = state.mapView === "flat";
+    // Tilted, the far (northern) end recedes: zoom in a little and look slightly north of centre
+    return { longitude: fit.longitude + (flat ? 0 : 0.3), latitude: fit.latitude - (flat ? 0 : 0.5),
+      zoom: fit.zoom + (flat ? 0 : box.clientWidth > 700 ? 0.32 : -0.1), pitch: flat ? 0 : 50, bearing: flat ? 0 : -12, maxPitch: 70, minZoom: 4 };
+  }
+  function flyTo(view) {
+    MAP.setProps({ initialViewState: { ...view, transitionDuration: reduceMotion ? 0 : 900,
+      transitionInterpolator: new deck.LinearInterpolator(["longitude", "latitude", "zoom", "pitch", "bearing"]),
+      transitionEasing: (t) => 1 - Math.pow(1 - t, 3) } });
+  }
+  let currentView = null;
+
+  function initMap() {
+    if (mapReady || !window.deck || !GEO) return mapReady;
+    const lighting = new deck.LightingEffect({
+      ambient: new deck.AmbientLight({ color: [255, 255, 255], intensity: 1.15 }),
+      key: new deck.DirectionalLight({ color: [255, 255, 255], intensity: 1.5, direction: [-3, -8, -6] }),
+    });
+    currentView = homeView();
+    MAP = new deck.Deck({
+      parent: $("#map"),
+      views: new deck.MapView({ repeat: false }),
+      initialViewState: currentView,
+      // Pinch, double-click or the buttons zoom; the page's own scrolling is never captured
+      controller: { scrollZoom: false, inertia: reduceMotion ? 0 : 350, dragRotate: true, touchRotate: true, keyboard: true },
+      effects: [lighting],
+      parameters: { clearColor: [0, 0, 0, 0] },
+      onViewStateChange: ({ viewState }) => { currentView = viewState; },
+      onHover: (info) => showTip(info),
+      onClick: (info) => showTip(info),
+      getCursor: ({ isDragging, isHovering }) => (isDragging ? "grabbing" : isHovering ? "pointer" : "grab"),
+    });
+    const zoomBy = (d) => flyTo({ ...currentView, zoom: Math.max(4, Math.min(11, currentView.zoom + d)) });
+    $("#map-in").addEventListener("click", () => zoomBy(0.6));
+    $("#map-out").addEventListener("click", () => zoomBy(-0.6));
+    $("#map-reset").addEventListener("click", () => flyTo(homeView()));
+    const drawView = () => seg($("#f-view"), [["3d", "3D"], ["flat", "Flat"]], state.mapView, (v) => {
+      state.mapView = v; drawView(); flyTo(homeView()); renderMap(filtered());
+    });
+    drawView();
+    mapReady = true;
+    return true;
+  }
+
+  function showTip(info) {
+    const tip = $("#map-tip");
+    const f = info && info.object;
+    if (!f) { tip.hidden = true; return; }
+    const p = f.properties, st = p.stat, total = schoolDays();
+    tip.replaceChildren(
+      el("p", { class: "t" }, p.name, el("span", { text: ` · ${p.region}` })),
+      st ? el("p", { class: "v" }, el("b", { text: pctText(st.days, total) }), ` of school days lost · ${st.days} of ${fmt(total)}`)
+         : el("p", { class: "v", text: "No class suspensions recorded" }),
+      st ? el("p", { class: "s", text: `Mostly ${st.cause.toLowerCase()} · ${plural(st.towns, "city or town", "cities and towns")} affected` }) : null);
+    tip.hidden = false;
+    const box = $("#map").getBoundingClientRect();
+    const x = Math.min(info.x + 14, box.width - tip.offsetWidth - 8), y = Math.max(8, info.y - tip.offsetHeight - 12);
+    tip.style.transform = `translate(${Math.max(8, x)}px, ${y}px)`;
+  }
+
+  function renderMap(rs) {
+    if (!initMap()) {
+      if (!window.deck) $("#map").replaceChildren(el("p", { class: "map-fallback", text: "The map needs WebGL, which this browser doesn't have turned on." }));
+      return;
+    }
+    const total = schoolDays();
+    const stats = new Map(provinceRows(rs).map((p) => [placeKey(p.province), p]));
+    const maxPct = Math.max(0.01, ...[...stats.values()].map((p) => p.pct));
+    const flat = state.mapView === "flat";
+    const key = `${state.year}|${state.region}|${state.mapView}`;
+    const data = GEO.features.map((f) => ({ ...f, properties: { ...f.properties, stat: stats.get(placeKey(f.properties.name)) || null } }));
+    const share = (f) => (f.properties.stat ? f.properties.stat.pct / maxPct : 0);
+    const outside = (f) => state.region && f.properties.region !== state.region;
+    MAP.setProps({
+      layers: [new deck.GeoJsonLayer({
+        id: "provinces", data, extruded: true, filled: true, stroked: false, pickable: true,
+        autoHighlight: true, highlightColor: [255, 255, 255, 70],
+        getElevation: (f) => (flat ? 0 : outside(f) ? 1500 : 3000 + share(f) * 140000),
+        getFillColor: (f) => (outside(f) ? [229, 229, 234, 255] : [...heat(f.properties.stat ? 0.08 + share(f) * 0.92 : 0), 255]),
+        material: { ambient: 0.5, diffuse: 0.55, shininess: 28, specularColor: [36, 38, 42] },
+        transitions: reduceMotion ? {} : { getElevation: { duration: 650, easing: (t) => 1 - Math.pow(1 - t, 3) }, getFillColor: { duration: 400 } },
+        updateTriggers: { getElevation: key, getFillColor: key },
+      })],
+    });
+    // Legend: the same colours, labelled with real percentages
+    const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => `${Math.round(t * maxPct)}%`);
+    $("#map-legend").replaceChildren(
+      el("span", { class: "lg-none" }, el("i", { style: `background:${STOPS[0][1]}` }), "None"),
+      el("div", { class: "lg-scale" },
+        el("div", { class: "lg-bar", style: `background:linear-gradient(90deg, ${STOPS.slice(1).map(([t, c]) => `${c} ${Math.round(((t - 0.12) / 0.88) * 100)}%`).join(", ")})` }),
+        el("div", { class: "lg-ticks" }, ...ticks.map((t) => el("span", { text: t })))),
+      el("span", { class: "lg-note", text: `of ${fmt(total)} school days lost${where()}` }));
   }
 
   // ── Overall: key figures ──────────────────────────────────────────────────

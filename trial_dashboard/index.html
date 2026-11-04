@@ -30,6 +30,29 @@
 
   <section class="kpis" id="kpis" aria-label="Key figures"></section>
 
+  <section class="card map-card" aria-labelledby="map-title">
+    <div class="card-head row">
+      <div>
+        <h2 id="map-title">Class suspensions across the country</h2>
+        <p class="muted" id="map-sub">Each province's share of school days lost. Taller and darker means more.</p>
+      </div>
+      <div class="seg small" id="f-view" role="group" aria-label="Map view"></div>
+    </div>
+    <div class="map-wrap">
+      <div class="map" id="map" role="img" aria-label="Map of the Philippines: each province coloured and raised by its share of school days lost to class suspensions"></div>
+      <div class="map-controls" aria-label="Map controls">
+        <button type="button" class="map-btn" id="map-in" aria-label="Zoom in">+</button>
+        <button type="button" class="map-btn" id="map-out" aria-label="Zoom out">−</button>
+        <button type="button" class="map-btn" id="map-reset" aria-label="Reset the view">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10a6 6 0 1 0 1.8-4.3M4 3.5v3h3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+      <div class="map-tip" id="map-tip" hidden></div>
+      <p class="map-hint" id="map-hint">Drag to move · right-drag or two fingers to tilt and turn</p>
+    </div>
+    <div class="map-legend" id="map-legend"></div>
+  </section>
+
   <section class="card" aria-labelledby="findings-title">
     <div class="card-head"><h2 id="findings-title">What the data shows</h2></div>
     <ul class="findings" id="findings"></ul>
@@ -107,6 +130,7 @@
   <footer class="footer" id="footer"></footer>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://unpkg.com/deck.gl@9.0.38/dist.min.js"></script>
 <script src="exec.js"></script>
 </body>
 </html>
