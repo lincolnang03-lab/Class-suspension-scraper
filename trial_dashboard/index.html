@@ -57,16 +57,6 @@
     <ul class="findings" id="findings"></ul>
   </section>
 
-  <section class="card" aria-labelledby="timeline-title">
-    <div class="card-head row">
-      <div>
-        <h2 id="timeline-title">School days lost, month by month</h2>
-        <p class="muted" id="timeline-sub"></p>
-      </div>
-      <div class="seg small" id="f-metric" role="group" aria-label="Measure"></div>
-    </div>
-    <div class="chart tall"><canvas id="c-timeline" role="img" aria-label="Class suspensions by month and cause"></canvas></div>
-  </section>
 
 
   <!-- ═══ Per-date breakdown ═══ -->
@@ -112,7 +102,7 @@
       <div>
         <h3>Definitions</h3>
         <p><b>LGU suspension</b>: one city, town or province suspending classes for one day. <b>School days lost</b>: school days on which at least one LGU in the area suspended classes; a province counts a day even if only some of its towns suspended.</p>
-        <p><b>School days</b>: every day in the period minus weekends, DepEd school breaks and national holidays (<span id="cal-count"></span>). Local holidays and private-school calendars can differ, so the percentage is an estimate.</p>
+        <p><b>School days</b>: Monday to Friday throughout the year, minus national holidays (<span id="cal-count"></span>). Local holidays such as city fiestas aren't subtracted.</p>
       </div>
       <div>
         <h3>Sources and limits</h3>
@@ -124,7 +114,6 @@
 
   <footer class="footer" id="footer"></footer>
 </div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://unpkg.com/deck.gl@9.0.38/dist.min.js"></script>
 <script src="exec.js"></script>
 </body>

@@ -55,10 +55,9 @@
   };
 
   const params = new URLSearchParams(location.search);
-  const state = { year: "all", region: "", metric: "days", date: "", town: null, townAll: false };
+  const state = { year: "all", region: "", date: "", town: null, townAll: false };
   let H = null, LIVE = null, RECS = [], YEARS = [], PLACES = [], SEARCH = [], uniqueNames = new Set();
   let HOLIDAYS = new Set(), BREAKS = [];
-  const charts = {};
 
   // ── Load ──────────────────────────────────────────────────────────────────
   const getJSON = (url) => fetch(url, { cache: "no-store" }).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
@@ -152,10 +151,6 @@
     const regions = unique(RECS.map((r) => r.region).filter(Boolean)).sort((a, b) => regionRank(a) - regionRank(b));
     $("#f-region").replaceChildren(el("option", { value: "", text: "All regions" }), ...regions.map((r) => el("option", { value: r, text: r })));
     $("#f-region").addEventListener("change", (e) => { state.region = e.target.value; render(); });
-    const drawMetric = () => seg($("#f-metric"), [["days", "School days lost"], ["lgu", "LGU suspensions"]], state.metric,
-      (v) => { state.metric = v; drawMetric(); renderTimeline(filtered()); });
-    drawMetric();
-
     bindSearch();
     $("#f-date").addEventListener("change", (e) => { state.date = e.target.value; renderByDate(); });
     $("#dl-date").addEventListener("click", () => downloadCsv(`class_suspensions_${state.date}`, rowsFor(state.date).map((r) => ({
@@ -173,7 +168,6 @@
     renderKpis(rs);
     renderMap(rs);
     renderFindings(rs);
-    renderTimeline(rs);
     renderTown();
     renderBreakdownLive();
     $("#cal-count").textContent = `${fmt(schoolDays())} school days from ${period()}`;
@@ -199,17 +193,6 @@
     return rgb(STOPS[STOPS.length - 1][1]);
   }
   const PH_BOUNDS = [[116.9, 4.5], [126.7, 21.2]];
-  // Region labels, shown only once the map is zoomed in: [name, centre (lon, lat), priority]
-  const REGION_LABELS = [
-    ["CAR", [121.06, 17.35]], ["Ilocos Region", [120.49, 16.91]], ["Cagayan Valley", [121.73, 17.20]],
-    ["Central Luzon", [120.82, 15.39]], ["NCR", [121.03, 14.61]], ["CALABARZON", [121.57, 14.16]],
-    ["MIMAROPA", [118.95, 10.05]], ["Bicol Region", [123.47, 13.27]], ["Western Visayas", [122.44, 11.17]],
-    ["Negros Island Region", [123.02, 10.01]], ["Central Visayas", [124.2, 9.85]], ["Eastern Visayas", [124.95, 11.54]],
-    ["Zamboanga Peninsula", [122.69, 7.66]], ["Northern Mindanao", [124.67, 8.19]], ["Caraga", [125.79, 8.81]],
-    ["Davao Region", [125.83, 7.21]], ["BARMM", [124.3, 7.6]], ["SOCCSKSARGEN", [124.82, 6.58]],
-  ];
-  const LABEL_ZOOM_IN = 0.7;   // labels appear this far past the full-country view
-  let labelsOn = false;
   let lastMapRs = [];
   function homeView() {
     const box = $("#map");
@@ -217,14 +200,9 @@
     const fit = vp.fitBounds(PH_BOUNDS, { padding: 24 });
     return { longitude: fit.longitude, latitude: fit.latitude, zoom: fit.zoom, pitch: 0, bearing: 0, minZoom: fit.zoom - 0.5, maxZoom: 11 };
   }
-  function syncLabels(zoom) {
-    const on = zoom > homeView().zoom + LABEL_ZOOM_IN;
-    if (on !== labelsOn) { labelsOn = on; renderMap(lastMapRs); }
-  }
   let flying = false;
   function flyTo(view) {
     currentView = view;          // buttons and resets animate the map; track where it's going, not where it is
-    syncLabels(view.zoom);
     flying = !reduceMotion && view.transitionDuration !== 0;
     MAP.setProps({ initialViewState: { ...view, transitionDuration: reduceMotion ? 0 : (view.transitionDuration ?? 900),
       onTransitionEnd: () => { flying = false; },
@@ -240,17 +218,15 @@
       parent: $("#map"),
       views: new deck.MapView({ repeat: false }),
       initialViewState: currentView,
-      // Pinch, double-click or the buttons zoom; the page's own scrolling is never captured
       // A flat map: pan and zoom only. Pinch, double-click or the buttons zoom; page scrolling is never captured
       controller: { scrollZoom: false, inertia: reduceMotion ? 0 : 350, dragRotate: false, touchRotate: false, keyboard: true },
       parameters: { clearColor: [0, 0, 0, 0] },
       onViewStateChange: ({ viewState }) => {
         if (flying) return;       // mid-animation frames report the old zoom; the target is already set
         currentView = viewState;
-        syncLabels(viewState.zoom);
       },
-      onHover: (info) => showTip(info),
-      onClick: (info) => showTip(info),
+      onHover: (info) => { showTip(info); hover(info.object || null); },
+      onClick: (info) => { showTip(info); hover(info.object || null); },
       getCursor: ({ isDragging, isHovering }) => (isDragging ? "grabbing" : isHovering ? "pointer" : "grab"),
     });
     const zoomBy = (d) => flyTo({ ...currentView, zoom: Math.max(currentView.minZoom ?? 4, Math.min(11, currentView.zoom + d)) });
@@ -279,19 +255,27 @@
     tip.style.transform = `translate(${Math.max(8, x)}px, ${y}px)`;
   }
 
-  function regionLayers() {
-    if (!labelsOn) return [];
-    const dim = (name) => state.region && state.region !== name;
-    return [new deck.TextLayer({
-      id: "region-names", data: REGION_LABELS, getPosition: (d) => d[1], getText: (d) => d[0],
-      fontFamily: css("--font-body"), fontWeight: 600, characterSet: "auto", sizeUnits: "pixels", getSize: 13,
-      getTextAnchor: "middle", getAlignmentBaseline: "center",
-      fontSettings: { sdf: true }, outlineWidth: 4, outlineColor: [255, 255, 255, 235],
-      getColor: (d) => (dim(d[0]) ? [142, 142, 147, 255] : [29, 29, 31, 255]), updateTriggers: { getColor: state.region },
-      // names that would overlap wait until you zoom in further
-      extensions: [new deck.CollisionFilterExtension()], collisionTestProps: { sizeScale: 1.15 },
-      transitions: reduceMotion ? {} : { getColor: 200 },
-    })];
+  // Hover: a dark outline and a deeper shade on the province, a lighter outline round its region
+  let hovered = null, baseLayer = null;
+  const darker = (c, k = 0.82) => c.map((v, i) => (i < 3 ? Math.round(v * k) : v));
+  function hover(f) {
+    if ((f && f.properties.name) === (hovered && hovered.properties.name)) return;
+    hovered = f;
+    drawLayers();
+  }
+  function highlightLayers() {
+    if (!hovered) return [];
+    const region = GEO.features.filter((g) => g.properties.region === hovered.properties.region);
+    return [
+      new deck.GeoJsonLayer({ id: "hover-region", data: region, filled: false, stroked: true,
+        getLineColor: [29, 29, 31, 170], lineWidthUnits: "pixels", getLineWidth: 1.5 }),
+      new deck.GeoJsonLayer({ id: "hover-province", data: [hovered], filled: true, stroked: true,
+        getFillColor: darker(hovered.__fill || [200, 200, 200, 255]), getLineColor: [29, 29, 31, 255],
+        lineWidthUnits: "pixels", getLineWidth: 2.5 }),
+    ];
+  }
+  function drawLayers() {
+    if (MAP && baseLayer) MAP.setProps({ layers: [baseLayer, ...highlightLayers()] });
   }
 
   function renderMap(rs) {
@@ -307,17 +291,18 @@
     const data = GEO.features.map((f) => ({ ...f, properties: { ...f.properties, stat: stats.get(placeKey(f.properties.name)) || null } }));
     const share = (f) => (f.properties.stat ? f.properties.stat.pct / maxPct : 0);
     const outside = (f) => state.region && f.properties.region !== state.region;
-    MAP.setProps({
-      layers: [new deck.GeoJsonLayer({
+    const fill = (f) => (outside(f) ? [229, 229, 234, 255] : [...heat(f.properties.stat ? 0.08 + share(f) * 0.92 : 0), 255]);
+    data.forEach((f) => { f.__fill = fill(f); });
+    if (hovered) hovered = data.find((f) => f.properties.name === hovered.properties.name && f.geometry === hovered.geometry) || null;
+    baseLayer = new deck.GeoJsonLayer({
         id: "provinces", data, filled: true, stroked: true, pickable: true,
-        autoHighlight: true, highlightColor: [255, 255, 255, 90],
-        getFillColor: (f) => (outside(f) ? [229, 229, 234, 255] : [...heat(f.properties.stat ? 0.08 + share(f) * 0.92 : 0), 255]),
+        getFillColor: (f) => f.__fill,
         // thin white borders keep neighbouring provinces apart
         getLineColor: [255, 255, 255, 230], lineWidthUnits: "pixels", getLineWidth: 0.8, lineWidthMinPixels: 0.5,
         transitions: reduceMotion ? {} : { getFillColor: { duration: 400 } },
         updateTriggers: { getFillColor: key },
-      }), ...regionLayers()],
-    });
+      });
+    drawLayers();
     // Legend: the same colours, labelled with real percentages
     const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => `${Math.round(t * maxPct)}%`);
     $("#map-legend").replaceChildren(
@@ -408,82 +393,9 @@
     $("#findings").replaceChildren(...out);
   }
 
-  // ── Overall: charts ───────────────────────────────────────────────────────
+  // ── Cause names and colours (used by the search result) ───────────────────
   const SHORT_CAUSE = { "Typhoon / tropical storm": "Typhoon or storm", "Low pressure area / shear line": "Low pressure" };
   const groupOf = (cause) => GROUPS.find(([, causes]) => causes.includes(cause)) || GROUPS[3];
-  // Prints each bar's total (vertical stacks) or value (horizontal bars) next to it
-  const valueLabels = {
-    id: "valueLabels",
-    afterDatasetsDraw(chart) {
-      const { ctx, scales: { x, y } } = chart;
-      const horizontal = chart.options.indexAxis === "y";
-      const n = chart.data.labels.length;
-      ctx.save();
-      ctx.font = `600 12px ${css("--font-body")}`;
-      ctx.fillStyle = css("--ink");
-      for (let i = 0; i < n; i++) {
-        const total = chart.data.datasets.reduce((s, ds, k) => s + (chart.isDatasetVisible(k) ? ds.data[i] || 0 : 0), 0);
-        if (!total) continue;
-        if (horizontal) {
-          ctx.textAlign = "left"; ctx.textBaseline = "middle";
-          ctx.fillText(fmt(total), x.getPixelForValue(total) + 6, y.getPixelForValue(i));
-        } else {
-          ctx.textAlign = "center"; ctx.textBaseline = "bottom";
-          ctx.fillText(fmt(total), x.getPixelForValue(i), y.getPixelForValue(total) - 4);
-        }
-      }
-      ctx.restore();
-    },
-  };
-  function draw(id, config) {
-    Chart.defaults.font.family = css("--font-body");
-    Chart.defaults.font.size = 13;
-    Chart.defaults.color = css("--muted");
-    if (charts[id]) charts[id].destroy();
-    config.options.animation = false;  // labels and bars appear together
-    charts[id] = new Chart(document.getElementById(id), { ...config, plugins: [valueLabels] });
-  }
-
-  function monthsInView() {
-    const [a, b] = periodRange();
-    const out = [];
-    for (let m = a.slice(0, 7); m <= b.slice(0, 7);) {
-      out.push(m);
-      const [y, mm] = m.split("-").map(Number);
-      m = mm === 12 ? `${y + 1}-01` : `${y}-${String(mm + 1).padStart(2, "0")}`;
-    }
-    return out;
-  }
-
-  function renderTimeline(rs) {
-    const months = monthsInView();
-    const lgu = lguOnly(rs);
-    const value = (month, causes) => (state.metric === "lgu"
-      ? lgu.filter((r) => r.month === month && causes.includes(r.cause)).length
-      : lostDays(rs.filter((r) => r.month === month && causes.includes(r.cause))).length);
-    $("#timeline-sub").textContent = state.metric === "lgu"
-      ? `LGU suspensions each month${where()}, by cause. The number on each bar is the month's total.`
-      : `School days with a suspension somewhere${where()}, each month, by cause. The number on each bar is the month's total.`;
-    const datasets = GROUPS.map(([label, causes, color]) => ({ label, data: months.map((m) => value(m, causes)),
-      backgroundColor: css(color), borderWidth: 0, borderRadius: 3, maxBarThickness: 34 })).filter((ds) => ds.data.some(Boolean));
-    draw("c-timeline", {
-      type: "bar",
-      // Month on top; the year underneath only at January and the first bar
-      data: { labels: months.map((m, i) => (i === 0 || m.endsWith("-01") ? [MON[+m.slice(5) - 1], m.slice(0, 4)] : MON[+m.slice(5) - 1])), datasets },
-      options: {
-        responsive: true, maintainAspectRatio: false, layout: { padding: { top: 22 } },
-        plugins: {
-          legend: { position: "top", align: "start", labels: { boxWidth: 14, boxHeight: 14, padding: 16, color: css("--ink"), font: { size: 13 } } },
-          tooltip: { mode: "index", filter: (i) => i.raw > 0,
-            callbacks: { title: (items) => { const m = months[items[0].dataIndex]; return `${MONTH_FULL[+m.slice(5) - 1]} ${m.slice(0, 4)}`; } } },
-        },
-        scales: {
-          x: { stacked: true, grid: { display: false }, ticks: { autoSkip: window.innerWidth < 760, autoSkipPadding: 6, maxRotation: 0, minRotation: 0, font: { size: 12 } } },
-          y: { stacked: true, beginAtZero: true, grace: "8%", ticks: { precision: 0 }, grid: { color: css("--line") }, border: { display: false } },
-        },
-      },
-    });
-  }
 
   // ── Breakdown: search a city, municipality or province ────────────────────
   // A record applies to a town if it names it or covers it (province-wide, except independent cities

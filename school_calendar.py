@@ -1,7 +1,7 @@
 """
-School days: every day in the period minus weekends, school breaks and holidays. The dashboard
-uses this as the base for "% of school days lost". Public-school calendar; private schools and
-local holidays (city fiestas, charter days) can differ, so the count is an estimate.
+School days: Monday to Friday throughout the year, minus national holidays. The dashboard uses
+this as the base for "% of school days lost". School breaks are listed below for reference but are
+NOT subtracted (per the project's definition); local holidays (city fiestas) aren't included either.
 
 Sources
 - SY 2024-25: DepEd Order 9, s. 2024 (Jul 29, 2024 - Apr 15, 2025); classes resumed Jan 2, 2025
@@ -45,8 +45,7 @@ HOLIDAYS = [
 
 def as_json() -> dict:
     return {
-        "breaks": [list(b) for b in BREAKS],
+        "breaks": [],   # school breaks are not subtracted: every weekday that isn't a national holiday counts
         "holidays": [list(h) for h in HOLIDAYS],
-        "note": "Public-school calendar: weekends, DepEd school breaks and national holidays are not school days. "
-                "Local holidays and private-school calendars can differ, so this is an estimate.",
+        "note": "School days: Monday to Friday throughout the year, minus national holidays.",
     }
