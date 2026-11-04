@@ -68,10 +68,6 @@
     <div class="chart tall"><canvas id="c-timeline" role="img" aria-label="Class suspensions by month and cause"></canvas></div>
   </section>
 
-  <section class="card" aria-labelledby="cause-title">
-    <div class="card-head"><h2 id="cause-title">Why classes were suspended</h2><p class="muted">School days with suspensions, by the cause the announcements gave.</p></div>
-    <div class="chart short"><canvas id="c-cause" role="img" aria-label="School days by cause"></canvas></div>
-  </section>
 
   <!-- ═══ Per-date breakdown ═══ -->
   <h2 class="section-title" id="breakdown">Per-date breakdown</h2>
@@ -85,16 +81,16 @@
       <button type="button" class="btn primary" id="check-now">Check now</button>
     </div>
     <p class="check-status" id="check-status" aria-live="polite" hidden></p>
-    <p class="muted search-help" id="town-help">Search a city or town to see whether its classes are suspended today or tomorrow, and every school day it has lost.</p>
+    <p class="muted search-help" id="town-help">Search a city, municipality or province to see today and tomorrow, its school days lost and why.</p>
     <div class="search" id="town-box">
       <svg class="search-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.75" fill="none" stroke="currentColor" stroke-width="2"/><path d="M13 13l4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       <label for="town" class="visually-hidden">City or town</label>
       <input id="town" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="town-options"
-             aria-describedby="town-help" autocomplete="off" spellcheck="false" placeholder="Search cities and towns">
+             aria-describedby="town-help" autocomplete="off" spellcheck="false" placeholder="Search a city, municipality or province">
       <button type="button" class="search-clear" id="town-clear" aria-label="Clear search" hidden>
         <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9"/><path d="M7 7l6 6M13 7l-6 6" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>
       </button>
-      <ul class="search-results" id="town-options" role="listbox" aria-label="Matching cities and towns" hidden></ul>
+      <ul class="search-results" id="town-options" role="listbox" aria-label="Matching places" hidden></ul>
     </div>
     <div id="town-result" aria-live="polite"></div>
     <div class="now-days" id="now-days" role="group" aria-label="Today and tomorrow"></div>

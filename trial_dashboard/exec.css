@@ -144,7 +144,9 @@ select {
   transform-origin: top center; animation: pop-in 180ms var(--ease);
 }
 @keyframes pop-in { from { opacity: 0; transform: scale(0.98) translateY(-4px); } to { opacity: 1; transform: none; } }
-.search-results li { display: block; padding: 10px 12px; border-radius: 9px; cursor: pointer; line-height: 1.35; }
+.search-results li { display: grid; gap: 2px; padding: 9px 12px; border-radius: 9px; cursor: pointer; line-height: 1.35; }
+.search-results li .meta { font-size: 0.8125rem; color: var(--muted); }
+.search-results li[aria-selected="true"] .meta, .search-results li:hover .meta { color: rgba(255, 255, 255, 0.85); }
 .search-results li .nm { font-weight: 500; color: var(--ink); }
 .search-results li .nm mark { background: none; color: var(--accent); font-weight: 650; }
 .search-results li .pl { color: var(--ink-2); }  /* one entry: Town, Province, Region */
@@ -320,4 +322,18 @@ select {
 }
 @media (prefers-reduced-transparency: reduce) {
   .map-btn, .map-tip { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
+}
+
+/* Search result: why school days were lost */
+.reasons { display: grid; gap: 8px; }
+.reason-list { margin: 0; padding: 10px 16px; list-style: none; background: var(--fill); border-radius: var(--radius-sm); display: grid; gap: 10px; }
+.reason-list li { display: grid; grid-template-columns: minmax(9rem, 13rem) 1fr auto; align-items: center; gap: 14px; font-size: 0.9375rem; }
+.reason-list .rn { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; }
+.reason-list .rn i { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.reason-list .rb { height: 8px; border-radius: 999px; background: var(--fill-2); overflow: hidden; }
+.reason-list .rb i { display: block; height: 100%; border-radius: 999px; }
+.reason-list .rv { font-size: 0.8125rem; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) {
+  .reason-list li { grid-template-columns: 1fr auto; }
+  .reason-list .rb { grid-column: 1 / -1; grid-row: 2; }
 }
