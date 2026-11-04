@@ -326,6 +326,7 @@ select {
   box-shadow: var(--shadow-pop); animation: panel-in 220ms var(--ease);
 }
 @keyframes panel-in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+.map-panel[hidden] { display: none; }   /* display: grid above would otherwise override hidden */
 .mp-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .mp-head h3 { font: 700 1.375rem/1.15 var(--font-display); letter-spacing: -0.025em; }
 .mp-head p { margin: 2px 0 0; font-size: 0.8125rem; color: var(--muted); }
