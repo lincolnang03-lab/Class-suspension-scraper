@@ -55,7 +55,7 @@
   };
 
   const params = new URLSearchParams(location.search);
-  const state = { year: "all", region: "", metric: "days", date: "", town: null, townAll: false, mapView: "3d" };
+  const state = { year: "all", region: "", metric: "days", date: "", town: null, townAll: false };
   let H = null, LIVE = null, RECS = [], YEARS = [], PLACES = [], uniqueNames = new Set();
   let HOLIDAYS = new Set(), BREAKS = [];
   const charts = {};
@@ -176,7 +176,7 @@
     $("#footer").textContent = `Past data: ${fmt(RECS.length)} records on ${unique(RECS.map((r) => r.date)).length} days, to ${dayLabel(lastDate(), { month: "long", day: "numeric", year: "numeric" })}. Source: ${H.source}; coming days from the live news check.`;
   }
 
-  // ── Overall: the 3D map ───────────────────────────────────────────────────
+  // ── Overall: the map ───────────────────────────────────────────────────
   // Green (few) → yellow → red → dark red (most), by share of school days lost
   let GEO = null, MAP = null, mapReady = false;
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -195,50 +195,57 @@
     return rgb(STOPS[STOPS.length - 1][1]);
   }
   const PH_BOUNDS = [[116.9, 4.5], [126.7, 21.2]];
+  // Region labels: [name, short code, centre (lon, lat), side of the callout column, label latitude]
+  // The columns sit in the sea either side of the islands so names never sit on top of each other.
+  const REGION_LABELS = [
+    ["CAR", "CAR", [121.06, 17.35], "w", 18.2], ["Ilocos Region", "I", [120.49, 16.91], "w", 17.2],
+    ["Central Luzon", "III", [120.82, 15.39], "w", 15.4], ["NCR", "NCR", [121.03, 14.61], "w", 14.4],
+    ["MIMAROPA", "IV-B", [118.95, 10.05], "w", 11.6], ["Western Visayas", "VI", [122.44, 11.17], "w", 10.6],
+    ["Negros Island Region", "NIR", [123.02, 10.01], "w", 9.6], ["Zamboanga Peninsula", "IX", [122.69, 7.66], "w", 7.7],
+    ["BARMM", "BARMM", [124.3, 7.6], "w", 6.8],
+    ["Cagayan Valley", "II", [121.73, 17.20], "e", 17.2], ["CALABARZON", "IV-A", [121.57, 14.16], "e", 14.2],
+    ["Bicol Region", "V", [123.47, 13.27], "e", 13.2], ["Eastern Visayas", "VIII", [124.95, 11.54], "e", 11.5],
+    ["Central Visayas", "VII", [123.95, 10.13], "e", 10.4], ["Caraga", "XIII", [125.79, 8.81], "e", 9.0],
+    ["Northern Mindanao", "X", [124.67, 8.19], "e", 8.1], ["Davao Region", "XI", [125.83, 7.21], "e", 7.2],
+    ["SOCCSKSARGEN", "XII", [124.82, 6.58], "e", 6.3],
+  ];
+  const COLUMN_X = { w: 116.3, e: 127.3 };
+  let lastMapRs = [];
   function homeView() {
     const box = $("#map");
     const vp = new deck.WebMercatorViewport({ width: box.clientWidth || 800, height: box.clientHeight || 560 });
     const fit = vp.fitBounds(PH_BOUNDS, { padding: 24 });
-    const flat = state.mapView === "flat";
-    // Tilted, the far (northern) end recedes: zoom in a little and look slightly north of centre
-    return { longitude: fit.longitude + (flat ? 0 : 0.3), latitude: fit.latitude - (flat ? 0 : 0.5),
-      zoom: fit.zoom + (flat ? 0 : box.clientWidth > 700 ? 0.32 : -0.1), pitch: flat ? 0 : 50, bearing: flat ? 0 : -12, maxPitch: 70, minZoom: 4 };
+    return { longitude: fit.longitude, latitude: fit.latitude, zoom: fit.zoom, pitch: 0, bearing: 0, minZoom: fit.zoom - 0.5, maxZoom: 11 };
   }
   function flyTo(view) {
     MAP.setProps({ initialViewState: { ...view, transitionDuration: reduceMotion ? 0 : 900,
-      transitionInterpolator: new deck.LinearInterpolator(["longitude", "latitude", "zoom", "pitch", "bearing"]),
+      transitionInterpolator: new deck.LinearInterpolator(["longitude", "latitude", "zoom"]),
       transitionEasing: (t) => 1 - Math.pow(1 - t, 3) } });
   }
   let currentView = null;
 
   function initMap() {
     if (mapReady || !window.deck || !GEO) return mapReady;
-    const lighting = new deck.LightingEffect({
-      ambient: new deck.AmbientLight({ color: [255, 255, 255], intensity: 1.15 }),
-      key: new deck.DirectionalLight({ color: [255, 255, 255], intensity: 1.5, direction: [-3, -8, -6] }),
-    });
     currentView = homeView();
     MAP = new deck.Deck({
       parent: $("#map"),
       views: new deck.MapView({ repeat: false }),
       initialViewState: currentView,
       // Pinch, double-click or the buttons zoom; the page's own scrolling is never captured
-      controller: { scrollZoom: false, inertia: reduceMotion ? 0 : 350, dragRotate: true, touchRotate: true, keyboard: true },
-      effects: [lighting],
+      // A flat map: pan and zoom only. Pinch, double-click or the buttons zoom; page scrolling is never captured
+      controller: { scrollZoom: false, inertia: reduceMotion ? 0 : 350, dragRotate: false, touchRotate: false, keyboard: true },
       parameters: { clearColor: [0, 0, 0, 0] },
       onViewStateChange: ({ viewState }) => { currentView = viewState; },
       onHover: (info) => showTip(info),
       onClick: (info) => showTip(info),
       getCursor: ({ isDragging, isHovering }) => (isDragging ? "grabbing" : isHovering ? "pointer" : "grab"),
     });
-    const zoomBy = (d) => flyTo({ ...currentView, zoom: Math.max(4, Math.min(11, currentView.zoom + d)) });
+    const zoomBy = (d) => flyTo({ ...currentView, zoom: Math.max(currentView.minZoom ?? 4, Math.min(11, currentView.zoom + d)) });
     $("#map-in").addEventListener("click", () => zoomBy(0.6));
     $("#map-out").addEventListener("click", () => zoomBy(-0.6));
     $("#map-reset").addEventListener("click", () => flyTo(homeView()));
-    const drawView = () => seg($("#f-view"), [["3d", "3D"], ["flat", "Flat"]], state.mapView, (v) => {
-      state.mapView = v; drawView(); flyTo(homeView()); renderMap(filtered());
-    });
-    drawView();
+    // Re-fit when the card changes size (phone rotation, window resize)
+    new ResizeObserver(() => { flyTo({ ...homeView(), transitionDuration: 0 }); renderMap(lastMapRs); }).observe($("#map"));
     mapReady = true;
     return true;
   }
@@ -259,7 +266,33 @@
     tip.style.transform = `translate(${Math.max(8, x)}px, ${y}px)`;
   }
 
+  function regionLayers() {
+    const wide = $("#map").clientWidth > 640;
+    const dim = (name) => state.region && state.region !== name;
+    const ink = (name) => (dim(name) ? [142, 142, 147, 255] : [29, 29, 31, 255]);
+    const text = { fontFamily: css("--font-body"), fontWeight: 600, characterSet: "auto", sizeUnits: "pixels",
+      fontSettings: { sdf: true }, outlineWidth: 4, outlineColor: [255, 255, 255, 235], getColor: (d) => ink(d[0]),
+      updateTriggers: { getColor: state.region } };
+    if (!wide) {
+      // Phones: short codes on the regions themselves
+      return [new deck.TextLayer({ id: "region-codes", data: REGION_LABELS, getPosition: (d) => d[2], getText: (d) => d[1],
+        getSize: 11, getTextAnchor: "middle", getAlignmentBaseline: "center", ...text })];
+    }
+    const from = (d) => [COLUMN_X[d[3]] + (d[3] === "w" ? 0.25 : -0.25), d[4]];
+    return [
+      new deck.LineLayer({ id: "region-leaders", data: REGION_LABELS, getSourcePosition: from, getTargetPosition: (d) => d[2],
+        getColor: (d) => (dim(d[0]) ? [174, 174, 178, 110] : [110, 110, 115, 160]), getWidth: 1, widthUnits: "pixels",
+        updateTriggers: { getColor: state.region } }),
+      new deck.ScatterplotLayer({ id: "region-dots", data: REGION_LABELS, getPosition: (d) => d[2], radiusUnits: "pixels",
+        getRadius: 2.5, getFillColor: (d) => ink(d[0]), stroked: true, getLineColor: [255, 255, 255, 255], lineWidthUnits: "pixels",
+        getLineWidth: 1, updateTriggers: { getFillColor: state.region } }),
+      new deck.TextLayer({ id: "region-names", data: REGION_LABELS, getPosition: (d) => [COLUMN_X[d[3]], d[4]], getText: (d) => d[0],
+        getSize: 12.5, getTextAnchor: (d) => (d[3] === "w" ? "end" : "start"), getAlignmentBaseline: "center", ...text }),
+    ];
+  }
+
   function renderMap(rs) {
+    lastMapRs = rs;
     if (!initMap()) {
       if (!window.deck) $("#map").replaceChildren(el("p", { class: "map-fallback", text: "The map needs WebGL, which this browser doesn't have turned on." }));
       return;
@@ -267,21 +300,20 @@
     const total = schoolDays();
     const stats = new Map(provinceRows(rs).map((p) => [placeKey(p.province), p]));
     const maxPct = Math.max(0.01, ...[...stats.values()].map((p) => p.pct));
-    const flat = state.mapView === "flat";
-    const key = `${state.year}|${state.region}|${state.mapView}`;
+    const key = `${state.year}|${state.region}`;
     const data = GEO.features.map((f) => ({ ...f, properties: { ...f.properties, stat: stats.get(placeKey(f.properties.name)) || null } }));
     const share = (f) => (f.properties.stat ? f.properties.stat.pct / maxPct : 0);
     const outside = (f) => state.region && f.properties.region !== state.region;
     MAP.setProps({
       layers: [new deck.GeoJsonLayer({
-        id: "provinces", data, extruded: true, filled: true, stroked: false, pickable: true,
-        autoHighlight: true, highlightColor: [255, 255, 255, 70],
-        getElevation: (f) => (flat ? 0 : outside(f) ? 1500 : 3000 + share(f) * 140000),
+        id: "provinces", data, filled: true, stroked: true, pickable: true,
+        autoHighlight: true, highlightColor: [255, 255, 255, 90],
         getFillColor: (f) => (outside(f) ? [229, 229, 234, 255] : [...heat(f.properties.stat ? 0.08 + share(f) * 0.92 : 0), 255]),
-        material: { ambient: 0.5, diffuse: 0.55, shininess: 28, specularColor: [36, 38, 42] },
-        transitions: reduceMotion ? {} : { getElevation: { duration: 650, easing: (t) => 1 - Math.pow(1 - t, 3) }, getFillColor: { duration: 400 } },
-        updateTriggers: { getElevation: key, getFillColor: key },
-      })],
+        // thin white borders keep neighbouring provinces apart
+        getLineColor: [255, 255, 255, 230], lineWidthUnits: "pixels", getLineWidth: 0.8, lineWidthMinPixels: 0.5,
+        transitions: reduceMotion ? {} : { getFillColor: { duration: 400 } },
+        updateTriggers: { getFillColor: key },
+      }), ...regionLayers()],
     });
     // Legend: the same colours, labelled with real percentages
     const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => `${Math.round(t * maxPct)}%`);
