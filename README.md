@@ -53,7 +53,10 @@ Sonnet $2 / $10.
 ## Past data
 
 `trial_dashboard/history.json` holds every place in Rappler's roundups since January 2025
-(`rappler_history.py` + `build_history.py`, free). Rebuilding 2025 onward from all the major
+(`rappler_history.py` + `build_history.py`, free). Every check first runs
+`python build_history.py catch-up`, which adds the roundups for each day since the last one saved
+(`class_suspensions_YYYY.json`) and re-checks the last 3, so days the checker missed fill
+themselves in; it runs even before the API key is set. Rebuilding 2025 onward from all the major
 outlets is planned for when there's budget: `trial_pipeline.py` does it a month at a time, but
 only DepEd keeps a dated archive the checker can read; PNA and GMA need another way to reach
 past months.
@@ -62,7 +65,7 @@ past months.
 
 GitHub repository secrets (Settings → Secrets and variables → Actions):
 
-- `ANTHROPIC_API_KEY` — the checker does nothing until this is set.
+- `ANTHROPIC_API_KEY` — until this is set, checks only catch up Rappler's roundups (no news reading).
 - `VERCEL_TOKEN` — lets each check republish the site (vercel.com/account/tokens).
 
 Vercel project environment variable (Settings → Environment Variables), for the Check now button:

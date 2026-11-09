@@ -3,7 +3,8 @@ Past class suspensions for the dashboard: every LGU suspension in Rappler's dail
 roundups (class_suspensions_YYYY.json, from rappler_history.py / the notebook), with the cause
 of each day taken from the roundup's own opening line.
 
-    python build_history.py        # -> trial_dashboard/history.json   (free: no AI)
+    python build_history.py            # -> trial_dashboard/history.json   (free: no AI)
+    python build_history.py catch-up   # first add the days since the last saved roundup (every check runs this)
 
 The opening lines are cached in history_ledes.json, so re-running only fetches new days.
 """
@@ -11,7 +12,8 @@ The opening lines are cached in history_ledes.json, so re-running only fetches n
 import html
 import json
 import re
-from datetime import datetime
+import sys
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import reader
@@ -20,7 +22,8 @@ import trial_pipeline as tp
 from web import get, html_to_text, log
 
 ROOT = Path(__file__).parent
-YEARS = [2025, 2026]   # the dashboard covers 2025 onward
+YEARS = list(range(2025, datetime.now().year + 1))   # the dashboard covers 2025 onward
+RECHECK_DAYS = 3        # a roundup can appear or grow after the day was first saved
 LEDE_CACHE = ROOT / "history_ledes.json"
 OUT = ROOT / "trial_dashboard" / "history.json"
 
@@ -155,5 +158,33 @@ def main():
     log("Days by cause: " + json.dumps(Counter(v["cause"] for v in days.values()), ensure_ascii=False))
 
 
+def catch_up():
+    """Scrape Rappler's roundups for every day missing since the last one saved, through yesterday
+    (Philippine time), plus the last few saved days again. Missed checks fill themselves in this way."""
+    import rappler_history
+    yesterday = datetime.now(timezone(timedelta(hours=8))).date() - timedelta(days=1)
+    saved = {}
+    for y in range(2025, yesterday.year + 1):
+        path = ROOT / f"class_suspensions_{y}.json"
+        saved[y] = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    last = max((d for days in saved.values() for d in days), default="2024-12-31")
+    start = min(date.fromisoformat(last) + timedelta(days=1), yesterday - timedelta(days=RECHECK_DAYS - 1))
+    if start > yesterday:
+        return
+    got = rappler_history.scrape_range(start, yesterday)
+    for d, v in got.items():
+        old = saved[int(d[:4])].get(d)
+        if old and old["has_suspensions"] and not v["has_suspensions"]:
+            continue    # a failed fetch reads as "no roundup": never let it erase a saved list
+        saved[int(d[:4])][d] = v
+    for y, days in saved.items():
+        if days:
+            (ROOT / f"class_suspensions_{y}.json").write_text(
+                json.dumps(dict(sorted(days.items())), ensure_ascii=False, indent=2), encoding="utf-8")
+    log(f"Rappler roundups {start} to {yesterday}: {sum(v['has_suspensions'] for v in got.values())} of {len(got)} days had suspensions")
+
+
 if __name__ == "__main__":
+    if sys.argv[1:] == ["catch-up"]:
+        catch_up()
     main()

@@ -23,29 +23,30 @@ jobs:
       HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
       HAS_VERCEL: ${{ secrets.VERCEL_TOKEN != '' }}
     steps:
-      - name: Not set up yet
-        if: env.HAS_KEY != 'true'
-        run: echo "::notice::Add the ANTHROPIC_API_KEY repository secret to start checking the news."
       - uses: actions/checkout@v4
-        if: env.HAS_KEY == 'true'
       - uses: actions/setup-python@v5
-        if: env.HAS_KEY == 'true'
         with:
           python-version: "3.11"
           cache: pip
-      - if: env.HAS_KEY == 'true'
-        run: pip install -r requirements.txt
+      - run: pip install -r requirements.txt
+      # Free (no AI): adds Rappler's roundups for every day since the last saved one, so days the
+      # checker missed fill themselves in, then rebuilds the dashboard's past data
+      - name: Catch up past days from Rappler
+        run: python build_history.py catch-up
+      - name: Not set up yet
+        if: env.HAS_KEY != 'true'
+        run: echo "::notice::Add the ANTHROPIC_API_KEY repository secret to start checking the news."
       - name: Check the news
         if: env.HAS_KEY == 'true'
         run: python live.py run
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       - name: Save the results
-        if: env.HAS_KEY == 'true'
         run: |
           git config user.name "walang-pasok-checker"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add live/
+          git add 'class_suspensions_*.json' history_ledes.json trial_dashboard/history.json
+          if [ -d live ]; then git add live/; fi
           if [ -d costs ]; then git add costs/; fi
           if git diff --cached --quiet; then echo "Nothing changed"; exit 0; fi
           git commit -m "Live check $(date -u +%Y-%m-%dT%H:%MZ)"
@@ -53,7 +54,7 @@ jobs:
           git push
       # Republish the site with the new results (also what the dashboard's Check now button waits for)
       - name: Update the site
-        if: env.HAS_KEY == 'true' && env.HAS_VERCEL == 'true'
+        if: env.HAS_VERCEL == 'true'
         working-directory: trial_dashboard
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
