@@ -20,7 +20,7 @@ import html
 import io
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 
 from bs4 import BeautifulSoup
@@ -64,9 +64,18 @@ def _rss(url: str, outlet: str) -> list:
 
 # ── Listing what each outlet has now ────────────────────────────────────────
 
-def list_pna() -> list:
-    """PNA's latest, national, provincial and regional pages (20 articles each); dates come with the article."""
+def list_pna(days: int = 3) -> list:
+    """Everything PNA added or edited in the last few days, from its sitemap (which lists every article of
+    the past month or so, with when it last changed), plus its latest, national, provincial and regional
+    pages in case the sitemap lags. Article pages give the publication date."""
     rows = {}
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S")
+    r = get("https://www.pna.gov.ph/sitemap.xml")   # the bare pna.gov.ph address sits behind a bot check; www doesn't
+    if r is not None and r.status_code == 200:
+        for loc, mod in re.findall(r"<loc>https://(?:www\.)?pna\.gov\.ph(/article/[^<]+)</loc>\s*<lastmod>([^<]+)</lastmod>", r.text):
+            if mod[:19] >= since:
+                url = "https://www.pna.gov.ph" + loc
+                rows[url] = {"outlet": "PNA", "url": url, "title": "", "published": "", "modified_utc": mod[:19]}
     for page in ("latest-news", "news/national", "news/provincial", "news/regions"):
         r = get(f"https://www.pna.gov.ph/{page}")
         if r is None or r.status_code != 200:
