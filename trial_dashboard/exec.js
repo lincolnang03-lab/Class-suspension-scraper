@@ -50,7 +50,8 @@
   const placeKey = (s) => {
     const k = (s || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[‘’“”'"`]/g, "")
       .replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim()
-      .replace(/^city of /, "").replace(/ city$/, "").replace(/^(municipality|town) of /, "").replace(/ (town|municipality)$/, "");
+      .replace(/^city of /, "").replace(/ city$/, "").replace(/^(municipality|town) of /, "").replace(/ (town|municipality)$/, "")
+      .replace(/^sta /, "santa ").replace(/^sto /, "santo ");
     return ALIASES[k] || k;
   };
 
@@ -73,8 +74,10 @@
       GEO = geo;
       H = h;
       LIVE = live;
-      RECS = h.records.map(([date, region, province, city, scope, mask, sector, inPerson, partDay]) => ({
+      // Days the backfill searched also carry outlets, confidence and a source link (build_history.py)
+      RECS = h.records.map(([date, region, province, city, scope, mask, sector, inPerson, partDay, outlets, conf, why, url]) => ({
         date, region, province, city, scope, mask, sector, inPerson: !!inPerson, partDay: !!partDay,
+        outlets: outlets || ["Rappler"], conf: conf || null, why: why || "", url: url || "",
         year: date.slice(0, 4), month: date.slice(0, 7), cause: h.days[date].cause,
       }));
       YEARS = unique(RECS.map((r) => r.year)).sort();
@@ -444,8 +447,13 @@
     const heat = lost.filter((d) => H.days[d].cause === "Extreme heat");
     out.push(el("li", {}, b(byCause[0][0]), ` caused the most lost days (${byCause[0][1]})`,
       byCause[1] ? `, then ${byCause[1][0].toLowerCase()} (${byCause[1][1]})` : "", ".",
-      heat.length ? ` Extreme heat cost ${plural(heat.length, "day")}, all in ${unique(heat.map((d) => `${MONTH_FULL[+d.slice(5, 7) - 1]} ${d.slice(0, 4)}`)).join(" and ")}, when classes were still in session.` : ""));
+      heat.length ? ` Extreme heat cost ${plural(heat.length, "day")}, ${heatMonths(heat)}.` : ""));
 
+    function heatMonths(days) {   // "all in March 2025", or the two months with the most heat days
+      const months = [...countBy(days, (d) => `${MONTH_FULL[+d.slice(5, 7) - 1]} ${d.slice(0, 4)}`)].sort((x, y) => y[1] - x[1]);
+      return months.length <= 2 ? `all in ${months.map((m) => m[0]).join(" and ")}`
+        : `most of them in ${months.slice(0, 2).map((m) => m[0]).join(" and ")}`;
+    }
     const provs = provinceRows(rs).sort((a, c) => c.days - a.days).slice(0, 3);
     out.push(el("li", {}, "Hardest hit: ", ...provs.flatMap((p, i) => [i ? (i === provs.length - 1 ? " and " : ", ") : "", b(p.province), ` (${pctText(p.days, total)} of school days)`]), "."));
 
@@ -669,13 +677,17 @@
     if (r.inPerson) notes.push("face-to-face classes only");
     if (r.partDay) notes.push("part of the day");
     if (SECTOR_TEXT[r.sector]) notes.push(SECTOR_TEXT[r.sector]);
-    let conf = 3; const why = ["1 outlet (Rappler)"];
-    if (r.mask < 0) { conf -= 1; why.push("levels not stated"); }
-    if (!r.sector) { conf -= 1; why.push("public/private not stated"); }
+    let conf = r.conf, why = r.why;
+    if (!conf) {     // Rappler alone: one outlet, less for each missing detail
+      const w = ["1 outlet (Rappler)"];
+      conf = 3;
+      if (r.mask < 0) { conf -= 1; w.push("levels not stated"); }
+      if (!r.sector) { conf -= 1; w.push("public/private not stated"); }
+      conf = Math.max(1, conf); why = w.join("; ");
+    }
     return { date: r.date, region: r.region, province: r.province,
       city: r.scope === "province" ? "all cities" : r.city, scope: r.scope === "partial" ? "schools" : r.scope,
-      mask: r.mask, notes, lifted: false, conf: Math.max(1, conf), why: why.join("; "),
-      url: H.days[r.date].url, outlets: ["Rappler"] };
+      mask: r.mask, notes, lifted: false, conf, why, url: r.url || H.days[r.date].url, outlets: r.outlets };
   }
   const liveRows = () => (LIVE ? (LIVE.records || []).filter((r) => SHOWN.has(r.status)).map(liveRow) : []);
   function rowsFor(d) {
@@ -751,7 +763,7 @@
     const fromLive = rows.length && LIVE && d >= addDays(LIVE.today, -1);
     const long = dayLabel(d, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
     $("#date-sum").textContent = rows.length
-      ? `${long}: ${plural(rows.length, "place")} in ${plural(groups.size, "province")}${where()}. ${fromLive ? "From the live check." : "From Rappler's roundup."}${isSchoolDay(d) ? "" : " Not a school day."}`
+      ? `${long}: ${plural(rows.length, "place")} in ${plural(groups.size, "province")}${where()}. ${fromLive ? "From the live check." : `From ${unique(rows.flatMap((r) => r.outlets)).sort((a, b) => (a === "Rappler") - (b === "Rappler")).join(", ").replace(/, ([^,]*)$/, " and $1")}.`}${isSchoolDay(d) ? "" : " Not a school day."}`
       : `${long}: no suspensions${where()} ${d >= phToday() ? "announced so far" : "recorded"}.`;
     $("#dl-date").hidden = !rows.length;
     const head = el("thead", {}, el("tr", {},
@@ -835,7 +847,7 @@
   // ── Cost tracker: what the Claude API has cost, by day and all time (costs.json, from costs.py) ──
   const MODEL_NAME = { "claude-haiku-5-5": "Haiku 5.5", "claude-sonnet-5-5": "Sonnet 5.5", "claude-opus-5-5": "Opus 5.5" };
   const JOB_NAME = { "live scheduled": "Daily check", "live manual": "Check now", "live local": "Test check", live: "News check",
-    trial: "Trial run", accuracy: "Accuracy check" };
+    trial: "Trial run", accuracy: "Accuracy check", backfill: "Backfill of past days" };
   const money = (n) => (n === 0 ? "$0.00" : n < 0.01 ? "under $0.01" : `$${n.toFixed(2)}`);
   // One day's jobs in words: "Daily check ($0.03), Check now ($0.01)"; trial runs name the months of news they tested
   function jobsText(byJob) {

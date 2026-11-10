@@ -207,6 +207,7 @@ def place_key(name: str) -> str:
     s = re.sub(r" city$", "", s)
     s = re.sub(r"^(municipality|town) of ", "", s)
     s = re.sub(r" (town|municipality)$", "", s)
+    s = re.sub(r"^sta ", "santa ", re.sub(r"^sto ", "santo ", s))   # "Sta. Praxedes" = "Santa Praxedes"
     return PLACE_ALIASES.get(s, s)
 
 
@@ -439,6 +440,17 @@ REGION_WORDS = re.compile(r"region|rehiyon|\bncr\b|metro manila|calabarzon|mimar
                           r"\bcar\b|cordillera|bicol|visayas|mindanao|luzon|ilocos|cagayan valley|zamboanga peninsula|davao region", re.I)
 
 
+# A place that is one school or university ("Adamson University", "UP Cebu"), not a city's or
+# province's order: it counts as some schools in its province, never the whole province or more.
+SCHOOL_NAME = re.compile(r"\b(universit(y|ies)|colleges?|colegio|school|academy|institute|ateneo|la salle|seminary|schools network|consortium)\b"
+                         r"|\bU\.?P\b|\bUST\b|\bPUP\b|\bFEU\b|\bUE\b|\bPSHS\b", re.I)
+NOT_ONE_SCHOOL = re.compile(r"schools? division|division of|deped|all (public |private )?schools|\b(public|private) schools\b", re.I)
+
+
+def one_school(place_as_written: str) -> bool:
+    return bool(SCHOOL_NAME.search(place_as_written)) and not NOT_ONE_SCHOOL.search(place_as_written)
+
+
 def build_records(pool: dict, scans: list, dates: set):
     """
     Turn AI reads into one record per place and date (only dates in `dates`).
@@ -470,7 +482,8 @@ def build_records(pool: dict, scans: list, dates: set):
                 v = sp.get("check") or verify(sp, item.get("text", ""))
                 summary["entries"] += 1
                 summary["verified"] += v != "none"
-                specific = "Specific schools only" in normalize_levels(sp["levels"], sp["status"])["notes"]
+                specific = ("Specific schools only" in normalize_levels(sp["levels"], sp["status"])["notes"]
+                            or one_school(sp["place_as_written"] or ""))
                 # Province or region named with no town and no "specific schools" -> it covers the whole area
                 if sp["province"] and not sp["city"] and not specific:
                     sp["city"] = "all cities"

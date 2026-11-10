@@ -78,31 +78,37 @@ def rappler_reads(days: list, now: datetime) -> tuple:
     pool, reads = {}, []
     for d in days:
         rr = sources.rappler_roundup(d)
-        if not rr["found"] or not rr["suspensions"]:
-            continue
-        found = []
-        for rec in rr["suspensions"]:
-            region, province, city, scope = build_history.clean_place(
-                rec.get("region") or "", rec.get("province") or "",
-                "" if rec.get("city") == "all cities" else rec.get("city") or "")
-            info = rec.get("suspension_info") or ""
-            where = city or province
-            found.append({
-                "place_as_written": where, "island": rec.get("island") if rec.get("island") in ("Luzon", "Visayas", "Mindanao") else None,
-                "region": region or None, "province": province or None,
-                "city": city if scope == "city" else "all cities" if scope == "province" else None,
-                "dates": [d.isoformat()], "status": "suspended",
-                # A school or barangay list rather than a whole town: keep it as "some schools"
-                "levels": info if scope != "partial" else f"some schools: {city}; {info}",
-                "evidence_quote": f"{where} – {info}", "check": "quote",
-            })
-        pool[rr["url"]] = {"outlet": "Rappler", "url": rr["url"], "title": f"#WalangPasok: class suspensions, {d:%B %-d, %Y}",
-                           "published": f"{d}T00:00:00",
-                           "modified_utc": rr["modified_utc"] or now.strftime("%Y-%m-%dT%H:%M:%S")}
-        reads.append({"url": rr["url"], "usage": [], "result": {
-            "about_class_suspensions": True, "suspensions": found, "keywords": [],
-            "cited_sources": ["Rappler #WalangPasok roundup"]}})
+        if rr["found"] and rr["suspensions"]:
+            item, read = rappler_read(d, rr, now)
+            pool[item["url"]] = item
+            reads.append(read)
     return pool, reads
+
+
+def rappler_read(d, rr: dict, now: datetime) -> tuple:
+    """One roundup (live, or saved in class_suspensions_YYYY.json) -> (pool item, read)."""
+    found = []
+    for rec in rr["suspensions"]:
+        region, province, city, scope = build_history.clean_place(
+            rec.get("region") or "", rec.get("province") or "",
+            "" if rec.get("city") == "all cities" else rec.get("city") or "")
+        info = rec.get("suspension_info") or ""
+        where = city or province
+        found.append({
+            "place_as_written": where, "island": rec.get("island") if rec.get("island") in ("Luzon", "Visayas", "Mindanao") else None,
+            "region": region or None, "province": province or None,
+            "city": city if scope == "city" else "all cities" if scope == "province" else None,
+            "dates": [d.isoformat()], "status": "suspended",
+            # A school or barangay list rather than a whole town: keep it as "some schools"
+            "levels": info if scope != "partial" else f"some schools: {city}; {info}",
+            "evidence_quote": f"{where} – {info}", "check": "quote",
+        })
+    item = {"outlet": "Rappler", "url": rr["url"], "title": f"#WalangPasok: class suspensions, {d:%B %-d, %Y}",
+            "published": f"{d}T00:00:00",
+            "modified_utc": rr.get("modified_utc") or now.strftime("%Y-%m-%dT%H:%M:%S")}
+    return item, {"url": rr["url"], "usage": [], "result": {
+        "about_class_suspensions": True, "suspensions": found, "keywords": [],
+        "cited_sources": ["Rappler #WalangPasok roundup"]}}
 
 
 # ── One check ───────────────────────────────────────────────────────────────

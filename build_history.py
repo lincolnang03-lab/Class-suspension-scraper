@@ -141,12 +141,15 @@ def main():
                     1 if any(n.startswith("From") for n in lv["notes"]) else 0,
                 ])
     LEDE_CACHE.write_text(json.dumps(ledes, ensure_ascii=False, indent=1), encoding="utf-8")
+    records = merge_backfill(records, days)
     out = {
         "generated": datetime.now().isoformat(timespec="seconds"),
         "source": "Rappler #WalangPasok daily roundups",
         "covered": covered,
         "levels": tp.LEVELS,
-        "fields": ["date", "region", "province", "city", "scope", "levels_mask", "sector", "in_person_only", "part_day"],
+        # Days the backfill searched add: outlets, confidence (1-5), why, and a source link
+        "fields": ["date", "region", "province", "city", "scope", "levels_mask", "sector", "in_person_only", "part_day",
+                   "outlets", "confidence", "confidence_reason", "url"],
         "causes": [c for c, _ in CAUSES] + ["Not stated"],
         "days": days,
         "records": records,
@@ -156,6 +159,54 @@ def main():
     from collections import Counter
     log(f"{len(records)} place-days on {len(days)} days -> {OUT} ({OUT.stat().st_size / 1e6:.2f} MB)")
     log("Days by cause: " + json.dumps(Counter(v["cause"] for v in days.values()), ensure_ascii=False))
+
+
+SECTORS = {"Public & private": "both", "Public only": "public", "Private only": "private"}
+ACTIVE = {"suspended", "online_or_modular", "opening_postponed"}
+
+
+def merge_backfill(records: list, days: dict) -> list:
+    """On days the backfill searched (backfill.py), Rappler's rows give way to Rappler and the news
+    outlets merged: the places Rappler missed, and more outlets (so more confidence) for the ones it had."""
+    import backfill
+    merged = backfill.merged_days()
+    keep = [r for r in records if r[0] not in merged]
+    seen = set()
+    for d, recs in merged.items():
+        recs = [r for r in recs if r["status"] in ACTIVE]
+        if not recs:
+            continue
+        if d not in days:   # found only by the news (backfill's weekly pass): its cause from the articles
+            news = [s for r in recs for s in r["sources"]]
+            text = " ".join(dict.fromkeys(f"{s['title'] or ''} {s['quote'] or ''}" for s in news))
+            # The articles' passages and keywords too; the cause they name most often wins
+            text += " " + " ".join(backfill.article_words(s["url"]) for s in news)
+            counts = [(len(re.findall(pat, text.lower())), name) for name, pat in CAUSES]
+            cause = max(counts)[1] if max(counts)[0] else "Not stated"
+            storms = cause_of(text)[1]
+            days[d] = {"cause": cause, "storms": storms, "reason": news[0]["title"] or "", "url": news[0]["url"],
+                       "found_by": "news"}
+        for rec in recs:
+            if rec["scope"] in ("region", "national"):
+                region, province, city, scope = rec["region"] or "", "", "", rec["scope"]
+            else:
+                region, province, city, scope = clean_place(rec["region"] or "", rec["province"] or "",
+                                                            "" if rec["city"] in (None, "all cities") else rec["city"])
+                if rec["scope"] == "schools":
+                    scope = "partial"
+            key = (d, scope, tp.place_key(region if scope == "region" else province), tp.place_key(city))
+            if key in seen:
+                continue
+            seen.add(key)
+            lv = rec["levels"]
+            mask = -1 if lv is None else sum(1 << i for i, k in enumerate(tp.LEVELS) if lv.get(k))
+            outlets = sorted({s["outlet"] for s in rec["sources"]})
+            url = next((s["url"] for s in rec["sources"] if s["outlet"] != "Rappler"), rec["sources"][0]["url"])
+            keep.append([d, region, province, city, scope, mask, SECTORS.get(rec["sector"], ""),
+                         1 if "In-person only" in rec["notes"] else 0,
+                         1 if any(n.startswith("From") for n in rec["notes"]) else 0,
+                         outlets, rec["confidence"], rec["confidence_reason"], url])
+    return sorted(keep, key=lambda r: r[0])
 
 
 def catch_up():

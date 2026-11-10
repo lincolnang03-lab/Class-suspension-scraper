@@ -176,41 +176,55 @@ def _text_of(resp) -> str:
     return next(b.text for b in resp.content if b.type == "text")
 
 
-def read_article(client, item: dict) -> dict:
-    """-> {"url", "result" in SCAN_SCHEMA's shape, "usage": [calls]} or {"url", "error", "usage"}."""
-    calls = []
-    # Step 1: Haiku reads the whole article
-    resp = client.messages.create(
+def read_passages(client, item: dict) -> tuple:
+    """Step 1: Haiku reads the whole article. -> (found, calls, error); found is None on an error.
+    A read takes seconds; a 3-minute limit keeps one dropped connection from stalling a whole check."""
+    resp = client.with_options(timeout=180, max_retries=2).messages.create(
         model=READ_MODEL,
         max_tokens=16000,
         output_config={"effort": "low", "format": {"type": "json_schema", "schema": READ_SCHEMA}},
         system=READ_SYSTEM,
         messages=[{"role": "user", "content": _header(item) + f"\n<article>\n{item['text'][:MAX_ARTICLE_CHARS]}\n</article>"}],
     )
-    calls.append(costs.usage_of(resp))
+    calls = [costs.usage_of(resp)]
     if resp.stop_reason in ("refusal", "max_tokens"):
-        return {"url": item["url"], "error": f"read: {resp.stop_reason}", "usage": calls}
-    found = json.loads(_text_of(resp))
-    if not found["about_class_suspensions"] or not found["passages"]:
-        return {"url": item["url"], "usage": calls,
-                "result": {"about_class_suspensions": False, "suspensions": [], "keywords": [],
-                           "cited_sources": found["announced_by"]}}
+        return None, calls, f"read: {resp.stop_reason}"
+    return json.loads(_text_of(resp)), calls, None
 
-    # Step 2: Sonnet structures only the passages
+
+def not_about_suspensions(found: dict) -> dict:
+    return {"about_class_suspensions": False, "suspensions": [], "keywords": [], "cited_sources": found["announced_by"]}
+
+
+def structure_params(item: dict, found: dict, model: str = STRUCTURE_MODEL) -> dict:
+    """Step 2's request: Sonnet structures only the passages (also sent through the Batches API)."""
     passages = "\n".join(f"- {p}" for p in found["passages"])
-    with client.beta.messages.stream(
-        model=STRUCTURE_MODEL,
-        max_tokens=32000,
-        betas=[FALLBACK_BETA],
-        fallbacks="default",
-        output_config={"effort": "medium", "format": {"type": "json_schema", "schema": SCAN_SCHEMA}},
-        system=SCAN_SYSTEM,
-        messages=[{"role": "user", "content": _header(item) + f"\n<passages>\n{passages}\n</passages>"}],
-    ) as stream:
+    return {
+        "model": model,
+        "max_tokens": 32000,
+        "output_config": {"effort": "medium", "format": {"type": "json_schema", "schema": SCAN_SCHEMA}},
+        "system": SCAN_SYSTEM,
+        "messages": [{"role": "user", "content": _header(item) + f"\n<passages>\n{passages}\n</passages>"}],
+    }
+
+
+def structured(resp, found: dict) -> dict:
+    result = json.loads(_text_of(resp))
+    result["cited_sources"] = list(dict.fromkeys(result["cited_sources"] + found["announced_by"]))
+    return result
+
+
+def read_article(client, item: dict) -> dict:
+    """-> {"url", "result" in SCAN_SCHEMA's shape, "usage": [calls]} or {"url", "error", "usage"}."""
+    found, calls, error = read_passages(client, item)
+    if error:
+        return {"url": item["url"], "error": error, "usage": calls}
+    if not found["about_class_suspensions"] or not found["passages"]:
+        return {"url": item["url"], "usage": calls, "result": not_about_suspensions(found)}
+    # Step 2: Sonnet structures only the passages
+    with client.beta.messages.stream(**structure_params(item, found), betas=[FALLBACK_BETA], fallbacks="default") as stream:
         resp = stream.get_final_message()
     calls.append(costs.usage_of(resp))
     if resp.stop_reason in ("refusal", "max_tokens"):
         return {"url": item["url"], "error": f"structure: {resp.stop_reason}", "usage": calls}
-    result = json.loads(_text_of(resp))
-    result["cited_sources"] = list(dict.fromkeys(result["cited_sources"] + found["announced_by"]))
-    return {"url": item["url"], "result": result, "usage": calls}
+    return {"url": item["url"], "result": structured(resp, found), "usage": calls}

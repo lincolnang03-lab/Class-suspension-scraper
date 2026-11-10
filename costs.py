@@ -29,18 +29,26 @@ PRICES = {
 }
 
 
+SEARCH_USD = 0.01   # per web search
+
+
 def usd(model: str, input_tokens: int, output_tokens: int) -> float:
     pin, pout = PRICES.get(model, PRICES["claude-opus-5-5"])  # unknown model: price it high, not low
     return input_tokens * pin / 1e6 + output_tokens * pout / 1e6
 
 
-def usage_of(resp) -> dict:
-    """One call's usage, with the model that actually answered (a refusal fallback can switch it)."""
+def usage_of(resp, batch: bool = False) -> dict:
+    """One call's usage, with the model that actually answered (a refusal fallback can switch it).
+    Web searches are $0.01 each; the Batches API halves token prices."""
     u = resp.usage
     inp = (u.input_tokens or 0) + (getattr(u, "cache_creation_input_tokens", 0) or 0) \
         + (getattr(u, "cache_read_input_tokens", 0) or 0)
+    stu = getattr(u, "server_tool_use", None)
+    searches = (getattr(stu, "web_search_requests", 0) or 0) if stu else 0
+    tokens = usd(resp.model, inp, u.output_tokens or 0) * (0.5 if batch else 1)
     return {"model": resp.model, "input_tokens": inp, "output_tokens": u.output_tokens or 0,
-            "usd": round(usd(resp.model, inp, u.output_tokens or 0), 6)}
+            **({"web_searches": searches} if searches else {}), **({"batch": True} if batch else {}),
+            "usd": round(tokens + searches * SEARCH_USD, 6)}
 
 
 def total_usd(usage) -> float:

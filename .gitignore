@@ -7,6 +7,7 @@
 class_suspensions_2023.json
 class_suspensions_2024.json
 trial/
+backfill/.text/
 __pycache__/
 .DS_Store
 # The site reads live data from this repo; a data.json next to the page is only for local testing
