@@ -32,7 +32,7 @@ CAUSES = [
     ("Typhoon / tropical storm", r"\b(super typhoon|typhoon|severe tropical storm|tropical storm|tropical depression)\b"),
     ("Extreme heat", r"\bheat\b|high temperature|hot weather|init ng panahon"),
     ("Earthquake", r"earthquake|lindol|tremor"),
-    ("Volcanic activity", r"volcan|kanlaon|taal|mayon|ashfall|ash fall|phreatic"),
+    ("Volcanic activity", r"volcan|kanlaon|taal volcano|bulkang taal|mayon volcano|bulkang mayon|ashfall|ash fall|phreatic"),
     ("Transport strike", r"transport strike|jeepney strike|tigil[- ]pasada"),
     ("Low pressure area / shear line", r"low pressure area|\blpa\b|shear line|shearline|trough"),
     ("Monsoon rains", r"monsoon|habagat|amihan"),

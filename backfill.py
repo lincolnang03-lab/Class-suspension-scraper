@@ -11,6 +11,7 @@ places Rappler's roundups missed and to confirm the ones they listed. Built to k
     python backfill.py run --only 2025-07-22,2025-03-04    # a test on chosen days
     python backfill.py run --cap 18          # every day still to do, stopping before $18 is spent
     python backfill.py weeks --only 2025-03-31 --cap 22   # the cheaper weekly search (Mondays given)
+    python backfill.py weeks --more --cap 22              # 3 more searches a week: Luzon, Visayas, Mindanao
 
 The days Rappler shows suspensions are searched one by one (6 searches each). The other weeks get a
 cheaper pass: 3 searches for the whole week, for the single-town suspensions Rappler doesn't list. Results go to backfill/ (no article text: the
@@ -76,6 +77,19 @@ transport strike, a power outage or a local event. Run up to {n} web searches, e
 When you're done, reply with just "done".
 """
 
+FIND_WEEK_MORE_SYSTEM = """\
+You find news articles about class suspensions in the Philippines during one school week that earlier
+searches missed. These are usually small: one town or province, for floods, heavy rain, extreme heat,
+an earthquake, a volcano, a transport strike, a power outage or a local event. Run up to {n} web
+searches, each for one part of the country, worded differently from the earlier searches listed in the
+user's message:
+- one for Luzon and Metro Manila, naming a few of its provinces or cities
+- one for the Visayas, naming a few of its provinces or cities
+- one for Mindanao, naming a few of its provinces or cities
+Each with "class suspension", "suspend classes" or "walang pasok" and the month and days of the week.
+When you're done, reply with just "done".
+"""
+
 
 def target_days() -> list:
     out = []
@@ -99,14 +113,17 @@ def find_links(client, d: date, hint: str, provinces: list = (), n: int = SEARCH
                   f"Provinces with suspensions that day: {', '.join(provinces) or 'not known'}")
 
 
-def find_week_links(client, monday: date, covered: list, n: int = SEARCHES_PER_WEEK) -> tuple:
-    """Step 1 for one week, cheaper: a few searches for the whole week."""
+def find_week_links(client, monday: date, covered: list, n: int = SEARCHES_PER_WEEK, earlier: list = ()) -> tuple:
+    """Step 1 for one week, cheaper: a few searches for the whole week. With `earlier` (queries
+    already run for the week), a second round, one search per part of the country."""
     friday = monday + timedelta(days=4)
     span = (f"{monday:%B %-d} to {friday:%-d, %Y}" if monday.month == friday.month
             else f"{monday:%B %-d} to {friday:%B %-d, %Y}")
     note = (f"\nAlready covered (no need to search): {', '.join(f'{date.fromisoformat(c):%A %B %-d}' for c in covered)}"
             if covered else "")
-    return search(client, FIND_WEEK_SYSTEM.format(n=n), n, f"Week: Monday {span}.{note}")
+    if earlier:
+        note += "\nEarlier searches for this week:\n" + "\n".join(f"- {q}" for q in earlier)
+    return search(client, (FIND_WEEK_MORE_SYSTEM if earlier else FIND_WEEK_SYSTEM).format(n=n), n, f"Week: Monday {span}.{note}")
 
 
 def search(client, system: str, n: int, ask: str) -> tuple:
@@ -284,13 +301,15 @@ def empty_weeks() -> list:
     return out
 
 
-def cmd_weeks(max_weeks: int, cap: float, only: str = "", n_searches: int = SEARCHES_PER_WEEK):
-    """The cheaper pass over the weeks with days Rappler lists nothing."""
+def cmd_weeks(max_weeks: int, cap: float, only: str = "", n_searches: int = SEARCHES_PER_WEEK, more: bool = False):
+    """The cheaper pass over the weeks with days Rappler lists nothing. more: a second round of
+    searches for weeks already searched (saved under "more" in weeks.json)."""
     DIR.mkdir(exist_ok=True)
     TEXT.mkdir(exist_ok=True)
     weeks = json.loads(WEEKS.read_text(encoding="utf-8")) if WEEKS.exists() else {}
     reads = {r["url"]: r for r in read_jsonl(READS)}
-    todo = [w for w in empty_weeks() if w[0] not in weeks and (not only or w[0] in only.split(","))][:max_weeks]
+    todo = [w for w in empty_weeks() if (("more" not in weeks[w[0]]) if more else (w[0] not in weeks))
+            and (w[0] in weeks or not more) and (not only or w[0] in only.split(","))][:max_weeks]
     client = reader.make_client()
     start = spent()
     log(f"{len(todo)} weeks to search; backfill spending so far ${start:.2f}, cap ${cap:.2f}")
@@ -301,17 +320,21 @@ def cmd_weeks(max_weeks: int, cap: float, only: str = "", n_searches: int = SEAR
         if spent() + pending >= cap:
             log(f"Stopping before the week of {monday}: ${spent():.2f} spent + ~${pending:.2f} to structure reaches the ${cap:.2f} cap")
             break
-        links, call, searches = retry(lambda: find_week_links(client, date.fromisoformat(monday), covered, n_searches))
+        earlier = [q["query"] for q in weeks[monday]["searches"]] if more else []
+        links, call, searches = retry(lambda: find_week_links(client, date.fromisoformat(monday), covered, n_searches, earlier))
         costs.record(f"{JOB} week find", [call])
         items, kept = read_links(client, links, reads, in_range)
-        weeks[monday] = {"empty_days": empty, "links": len(links), "fetched": sum(1 for it in items if it.get("text")),
-                         "kept": len(kept),
-                         "about": sum(1 for it in kept if (reads[it["url"]]["found"] or {}).get("about_class_suspensions")),
-                         "searched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "searches": searches}
+        result = {"links": len(links), "fetched": sum(1 for it in items if it.get("text")), "kept": len(kept),
+                  "about": sum(1 for it in kept if (reads[it["url"]]["found"] or {}).get("about_class_suspensions")),
+                  "searched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "searches": searches}
+        if more:
+            weeks[monday]["more"] = result
+        else:
+            weeks[monday] = {"empty_days": empty, **result}
         WEEKS.write_text(json.dumps(weeks, indent=1), encoding="utf-8")
         write_jsonl(READS, list(reads.values()))
-        log(f"week of {monday}: {len(links)} links, {weeks[monday]['fetched']} read, {len(kept)} passed the free check, "
-            f"{weeks[monday]['about']} about suspensions · ${spent() - start:.3f} this run")
+        log(f"week of {monday}{' (more)' if more else ''}: {len(links)} links, {result['fetched']} read, {len(kept)} passed the free check, "
+            f"{result['about']} about suspensions · ${spent() - start:.3f} this run")
     structure(client, reads, WEEK_STRUCTURE_MODEL)
 
 
@@ -450,5 +473,6 @@ if __name__ == "__main__":
         sys.exit(__doc__)
     opt = lambda name, default: type(default)(args[args.index(name) + 1]) if name in args else default
     if args[0] == "weeks":
-        sys.exit(cmd_weeks(opt("--weeks", 999), opt("--cap", 22.0), opt("--only", ""), opt("--searches", SEARCHES_PER_WEEK)))
+        sys.exit(cmd_weeks(opt("--weeks", 999), opt("--cap", 22.0), opt("--only", ""), opt("--searches", SEARCHES_PER_WEEK),
+                           "--more" in args))
     cmd_run(opt("--days", 999), opt("--cap", 18.0), opt("--only", ""), opt("--searches", SEARCHES_PER_DAY))

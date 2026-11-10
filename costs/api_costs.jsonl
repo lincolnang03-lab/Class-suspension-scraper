@@ -2065,3 +2065,165 @@
 {"time": "2026-11-10T10:39:38+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2061, "output_tokens": 1646, "batch": true, "usd": 0.000515}
 {"time": "2026-11-10T10:45:00+00:00", "job": "live local test", "model": "claude-haiku-5-5", "input_tokens": 924, "output_tokens": 207, "usd": 0.000196}
 {"time": "2026-11-10T10:45:00+00:00", "job": "live local test", "model": "claude-sonnet-5-5", "input_tokens": 2072, "output_tokens": 677, "usd": 0.010914}
+{"time": "2026-11-10T12:39:39+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 30153, "output_tokens": 683, "web_searches": 3, "usd": 0.033357}
+{"time": "2026-11-10T12:39:48+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1599, "output_tokens": 258, "usd": 0.000289}
+{"time": "2026-11-10T12:39:49+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 4041, "output_tokens": 495, "usd": 0.000652}
+{"time": "2026-11-10T12:43:25+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2046, "output_tokens": 1533, "batch": true, "usd": 0.000486}
+{"time": "2026-11-10T12:43:25+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2314, "output_tokens": 1727, "batch": true, "usd": 0.000547}
+{"time": "2026-11-10T12:43:36+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 32219, "output_tokens": 809, "web_searches": 3, "usd": 0.033626}
+{"time": "2026-11-10T12:43:48+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 39410, "output_tokens": 394, "web_searches": 3, "usd": 0.034138}
+{"time": "2026-11-10T12:43:58+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1283, "output_tokens": 503, "usd": 0.00038}
+{"time": "2026-11-10T12:43:58+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1723, "output_tokens": 264, "usd": 0.000304}
+{"time": "2026-11-10T12:44:02+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 40695, "output_tokens": 385, "web_searches": 3, "usd": 0.034262}
+{"time": "2026-11-10T12:44:15+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 32675, "output_tokens": 735, "web_searches": 3, "usd": 0.033635}
+{"time": "2026-11-10T12:44:21+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 32612, "output_tokens": 435, "web_searches": 3, "usd": 0.033479}
+{"time": "2026-11-10T12:44:32+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 32936, "output_tokens": 512, "web_searches": 3, "usd": 0.03355}
+{"time": "2026-11-10T12:44:40+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1098, "output_tokens": 431, "usd": 0.000325}
+{"time": "2026-11-10T12:44:43+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 34340, "output_tokens": 428, "web_searches": 3, "usd": 0.033648}
+{"time": "2026-11-10T12:44:52+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1818, "output_tokens": 80, "usd": 0.000222}
+{"time": "2026-11-10T12:44:56+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 33964, "output_tokens": 427, "web_searches": 3, "usd": 0.03361}
+{"time": "2026-11-10T12:45:03+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1872, "output_tokens": 899, "usd": 0.000637}
+{"time": "2026-11-10T12:45:03+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 704, "output_tokens": 523, "usd": 0.000332}
+{"time": "2026-11-10T12:45:08+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 31399, "output_tokens": 658, "web_searches": 3, "usd": 0.033469}
+{"time": "2026-11-10T12:45:34+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1008, "output_tokens": 334, "usd": 0.000268}
+{"time": "2026-11-10T12:45:38+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 33243, "output_tokens": 648, "web_searches": 3, "usd": 0.033648}
+{"time": "2026-11-10T12:46:06+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1311, "output_tokens": 215, "usd": 0.000239}
+{"time": "2026-11-10T12:46:06+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1169, "output_tokens": 229, "usd": 0.000231}
+{"time": "2026-11-10T12:46:11+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 29992, "output_tokens": 600, "web_searches": 3, "usd": 0.033299}
+{"time": "2026-11-10T12:46:36+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1071, "output_tokens": 672, "usd": 0.000443}
+{"time": "2026-11-10T12:46:40+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 33354, "output_tokens": 551, "web_searches": 3, "usd": 0.033611}
+{"time": "2026-11-10T12:47:05+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 31398, "output_tokens": 638, "web_searches": 3, "usd": 0.033459}
+{"time": "2026-11-10T12:47:13+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 30649, "output_tokens": 653, "web_searches": 3, "usd": 0.033391}
+{"time": "2026-11-10T12:47:38+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 38279, "output_tokens": 363, "web_searches": 3, "usd": 0.034009}
+{"time": "2026-11-10T12:47:45+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 33225, "output_tokens": 640, "web_searches": 3, "usd": 0.033642}
+{"time": "2026-11-10T12:47:51+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1381, "output_tokens": 497, "usd": 0.000387}
+{"time": "2026-11-10T12:47:56+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 34489, "output_tokens": 752, "web_searches": 3, "usd": 0.033825}
+{"time": "2026-11-10T12:48:19+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1056, "output_tokens": 286, "usd": 0.000249}
+{"time": "2026-11-10T12:48:19+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1260, "output_tokens": 446, "usd": 0.000349}
+{"time": "2026-11-10T12:48:23+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 37912, "output_tokens": 413, "web_searches": 3, "usd": 0.033998}
+{"time": "2026-11-10T12:48:33+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 37942, "output_tokens": 400, "web_searches": 3, "usd": 0.033994}
+{"time": "2026-11-10T12:48:39+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1642, "output_tokens": 118, "usd": 0.000223}
+{"time": "2026-11-10T12:48:44+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 30801, "output_tokens": 736, "web_searches": 3, "usd": 0.033448}
+{"time": "2026-11-10T12:48:53+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 33749, "output_tokens": 627, "web_searches": 3, "usd": 0.033688}
+{"time": "2026-11-10T12:49:35+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1060, "output_tokens": 128, "usd": 0.00017}
+{"time": "2026-11-10T12:49:39+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 37743, "output_tokens": 421, "web_searches": 3, "usd": 0.033985}
+{"time": "2026-11-10T12:50:03+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 30878, "output_tokens": 549, "web_searches": 3, "usd": 0.033362}
+{"time": "2026-11-10T12:50:28+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 967, "output_tokens": 237, "usd": 0.000215}
+{"time": "2026-11-10T12:50:33+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 32960, "output_tokens": 705, "web_searches": 3, "usd": 0.033648}
+{"time": "2026-11-10T12:50:41+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 2125, "output_tokens": 248, "usd": 0.000336}
+{"time": "2026-11-10T12:50:46+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 31253, "output_tokens": 702, "web_searches": 3, "usd": 0.033476}
+{"time": "2026-11-10T12:51:11+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 32798, "output_tokens": 440, "web_searches": 3, "usd": 0.0335}
+{"time": "2026-11-10T12:51:23+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 31546, "output_tokens": 689, "web_searches": 3, "usd": 0.033499}
+{"time": "2026-11-10T12:51:30+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 40267, "output_tokens": 549, "web_searches": 3, "usd": 0.034301}
+{"time": "2026-11-10T12:51:39+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 34381, "output_tokens": 512, "web_searches": 3, "usd": 0.033694}
+{"time": "2026-11-10T12:52:06+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 34240, "output_tokens": 371, "web_searches": 3, "usd": 0.03361}
+{"time": "2026-11-10T12:52:13+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1608, "output_tokens": 429, "usd": 0.000375}
+{"time": "2026-11-10T12:52:15+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1887, "output_tokens": 861, "usd": 0.000619}
+{"time": "2026-11-10T12:52:21+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 32822, "output_tokens": 714, "web_searches": 3, "usd": 0.033639}
+{"time": "2026-11-10T12:53:16+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1298, "output_tokens": 358, "usd": 0.000309}
+{"time": "2026-11-10T12:53:22+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 30800, "output_tokens": 878, "web_searches": 3, "usd": 0.033519}
+{"time": "2026-11-10T12:53:32+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1705, "output_tokens": 836, "usd": 0.000589}
+{"time": "2026-11-10T12:53:35+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 32425, "output_tokens": 535, "web_searches": 3, "usd": 0.03351}
+{"time": "2026-11-10T12:53:52+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 29731, "output_tokens": 530, "web_searches": 3, "usd": 0.033238}
+{"time": "2026-11-10T12:54:02+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 31349, "output_tokens": 632, "web_searches": 3, "usd": 0.033451}
+{"time": "2026-11-10T12:54:13+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 33424, "output_tokens": 605, "web_searches": 3, "usd": 0.033645}
+{"time": "2026-11-10T12:54:22+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 2077, "output_tokens": 300, "usd": 0.000358}
+{"time": "2026-11-10T12:54:27+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 29658, "output_tokens": 390, "web_searches": 3, "usd": 0.033161}
+{"time": "2026-11-10T12:54:36+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 32132, "output_tokens": 555, "web_searches": 3, "usd": 0.033491}
+{"time": "2026-11-10T12:54:47+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 36157, "output_tokens": 427, "web_searches": 3, "usd": 0.033829}
+{"time": "2026-11-10T12:55:04+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 28577, "output_tokens": 529, "web_searches": 3, "usd": 0.033122}
+{"time": "2026-11-10T12:55:28+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 35921, "output_tokens": 508, "web_searches": 3, "usd": 0.033846}
+{"time": "2026-11-10T12:55:41+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 33921, "output_tokens": 559, "web_searches": 3, "usd": 0.033672}
+{"time": "2026-11-10T12:56:05+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 34984, "output_tokens": 446, "web_searches": 3, "usd": 0.033721}
+{"time": "2026-11-10T12:56:09+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 846, "output_tokens": 354, "usd": 0.000262}
+{"time": "2026-11-10T12:56:14+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 28459, "output_tokens": 710, "web_searches": 3, "usd": 0.033201}
+{"time": "2026-11-10T12:56:19+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 36344, "output_tokens": 557, "web_searches": 3, "usd": 0.033913}
+{"time": "2026-11-10T12:56:47+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 33285, "output_tokens": 515, "web_searches": 3, "usd": 0.033586}
+{"time": "2026-11-10T12:56:52+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 5378, "output_tokens": 73, "usd": 0.000574}
+{"time": "2026-11-10T12:56:56+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 32429, "output_tokens": 517, "web_searches": 3, "usd": 0.033501}
+{"time": "2026-11-10T12:57:17+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 38599, "output_tokens": 499, "web_searches": 3, "usd": 0.034109}
+{"time": "2026-11-10T12:57:24+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 36590, "output_tokens": 699, "web_searches": 3, "usd": 0.034008}
+{"time": "2026-11-10T12:57:41+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 32900, "output_tokens": 618, "web_searches": 3, "usd": 0.033599}
+{"time": "2026-11-10T12:57:46+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 948, "output_tokens": 244, "usd": 0.000217}
+{"time": "2026-11-10T12:57:46+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1287, "output_tokens": 218, "usd": 0.000238}
+{"time": "2026-11-10T12:57:50+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 33841, "output_tokens": 555, "web_searches": 3, "usd": 0.033662}
+{"time": "2026-11-10T12:58:01+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 31446, "output_tokens": 514, "web_searches": 3, "usd": 0.033402}
+{"time": "2026-11-10T12:58:08+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 30012, "output_tokens": 717, "web_searches": 3, "usd": 0.03336}
+{"time": "2026-11-10T12:58:32+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 32368, "output_tokens": 529, "web_searches": 3, "usd": 0.033501}
+{"time": "2026-11-10T12:58:58+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 30429, "output_tokens": 644, "web_searches": 3, "usd": 0.033365}
+{"time": "2026-11-10T12:59:28+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 30680, "output_tokens": 706, "web_searches": 3, "usd": 0.033421}
+{"time": "2026-11-10T12:59:43+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1152, "output_tokens": 379, "usd": 0.000305}
+{"time": "2026-11-10T12:59:47+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 29423, "output_tokens": 564, "web_searches": 3, "usd": 0.033224}
+{"time": "2026-11-10T12:59:54+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 29429, "output_tokens": 652, "web_searches": 3, "usd": 0.033269}
+{"time": "2026-11-10T13:00:12+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 31176, "output_tokens": 460, "web_searches": 3, "usd": 0.033348}
+{"time": "2026-11-10T13:00:24+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 33376, "output_tokens": 638, "web_searches": 3, "usd": 0.033657}
+{"time": "2026-11-10T13:00:32+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 29099, "output_tokens": 594, "web_searches": 3, "usd": 0.033207}
+{"time": "2026-11-10T13:00:44+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 33612, "output_tokens": 581, "web_searches": 3, "usd": 0.033652}
+{"time": "2026-11-10T13:01:01+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1587, "output_tokens": 79, "usd": 0.000198}
+{"time": "2026-11-10T13:01:01+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1701, "output_tokens": 143, "usd": 0.000242}
+{"time": "2026-11-10T13:01:06+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 33190, "output_tokens": 524, "web_searches": 3, "usd": 0.033581}
+{"time": "2026-11-10T13:01:25+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 29224, "output_tokens": 602, "web_searches": 3, "usd": 0.033223}
+{"time": "2026-11-10T13:01:48+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 34848, "output_tokens": 404, "web_searches": 3, "usd": 0.033687}
+{"time": "2026-11-10T13:02:16+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 30796, "output_tokens": 548, "web_searches": 3, "usd": 0.033354}
+{"time": "2026-11-10T13:02:26+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 28059, "output_tokens": 768, "web_searches": 3, "usd": 0.03319}
+{"time": "2026-11-10T13:03:03+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 30822, "output_tokens": 695, "web_searches": 3, "usd": 0.03343}
+{"time": "2026-11-10T13:03:32+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 30473, "output_tokens": 458, "web_searches": 3, "usd": 0.033276}
+{"time": "2026-11-10T13:03:39+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 30443, "output_tokens": 538, "web_searches": 3, "usd": 0.033313}
+{"time": "2026-11-10T13:03:58+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 29135, "output_tokens": 556, "web_searches": 3, "usd": 0.033191}
+{"time": "2026-11-10T13:04:06+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 29393, "output_tokens": 596, "web_searches": 3, "usd": 0.033237}
+{"time": "2026-11-10T13:04:15+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 994, "output_tokens": 258, "usd": 0.000228}
+{"time": "2026-11-10T13:04:20+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 35429, "output_tokens": 391, "web_searches": 3, "usd": 0.033738}
+{"time": "2026-11-10T13:04:33+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 28892, "output_tokens": 625, "web_searches": 3, "usd": 0.033202}
+{"time": "2026-11-10T13:04:40+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 29099, "output_tokens": 554, "web_searches": 3, "usd": 0.033187}
+{"time": "2026-11-10T13:04:52+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 29466, "output_tokens": 624, "web_searches": 3, "usd": 0.033259}
+{"time": "2026-11-10T13:05:02+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 29460, "output_tokens": 480, "web_searches": 3, "usd": 0.033186}
+{"time": "2026-11-10T13:05:17+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1184, "output_tokens": 299, "usd": 0.000268}
+{"time": "2026-11-10T13:05:22+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 35061, "output_tokens": 521, "web_searches": 3, "usd": 0.033767}
+{"time": "2026-11-10T13:05:50+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1727, "output_tokens": 232, "usd": 0.000289}
+{"time": "2026-11-10T13:05:55+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 27510, "output_tokens": 489, "web_searches": 3, "usd": 0.032995}
+{"time": "2026-11-10T13:06:21+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 29331, "output_tokens": 779, "web_searches": 3, "usd": 0.033323}
+{"time": "2026-11-10T13:06:29+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 33834, "output_tokens": 502, "web_searches": 3, "usd": 0.033634}
+{"time": "2026-11-10T13:06:34+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 27669, "output_tokens": 583, "web_searches": 3, "usd": 0.033058}
+{"time": "2026-11-10T13:06:39+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 34583, "output_tokens": 394, "web_searches": 3, "usd": 0.033655}
+{"time": "2026-11-10T13:06:45+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 30655, "output_tokens": 444, "web_searches": 3, "usd": 0.033287}
+{"time": "2026-11-10T13:06:50+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1288, "output_tokens": 567, "usd": 0.000412}
+{"time": "2026-11-10T13:06:54+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 36633, "output_tokens": 449, "web_searches": 3, "usd": 0.033888}
+{"time": "2026-11-10T13:07:03+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 27289, "output_tokens": 637, "web_searches": 3, "usd": 0.033047}
+{"time": "2026-11-10T13:07:06+00:00", "job": "backfill read", "model": "claude-haiku-5-5", "input_tokens": 1358, "output_tokens": 598, "usd": 0.000435}
+{"time": "2026-11-10T13:07:11+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 32128, "output_tokens": 431, "web_searches": 3, "usd": 0.033428}
+{"time": "2026-11-10T13:07:21+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 30841, "output_tokens": 390, "web_searches": 3, "usd": 0.033279}
+{"time": "2026-11-10T13:07:27+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 30902, "output_tokens": 506, "web_searches": 3, "usd": 0.033343}
+{"time": "2026-11-10T13:07:37+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 29725, "output_tokens": 572, "web_searches": 3, "usd": 0.033258}
+{"time": "2026-11-10T13:07:47+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 26440, "output_tokens": 619, "web_searches": 3, "usd": 0.032953}
+{"time": "2026-11-10T13:07:59+00:00", "job": "backfill week find", "model": "claude-haiku-5-5", "input_tokens": 28424, "output_tokens": 592, "web_searches": 3, "usd": 0.033138}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2766, "output_tokens": 3775, "batch": true, "usd": 0.001082}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2372, "output_tokens": 4210, "batch": true, "usd": 0.001171}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 1974, "output_tokens": 1115, "batch": true, "usd": 0.000377}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2067, "output_tokens": 508, "batch": true, "usd": 0.00023}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 1936, "output_tokens": 707, "batch": true, "usd": 0.000274}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2086, "output_tokens": 929, "batch": true, "usd": 0.000337}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2058, "output_tokens": 960, "batch": true, "usd": 0.000343}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2007, "output_tokens": 1030, "batch": true, "usd": 0.000358}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2134, "output_tokens": 1485, "batch": true, "usd": 0.000478}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2321, "output_tokens": 512, "batch": true, "usd": 0.000244}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 1938, "output_tokens": 921, "batch": true, "usd": 0.000327}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 1939, "output_tokens": 281, "batch": true, "usd": 0.000167}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2182, "output_tokens": 428, "batch": true, "usd": 0.000216}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2159, "output_tokens": 854, "batch": true, "usd": 0.000321}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2158, "output_tokens": 953, "batch": true, "usd": 0.000346}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2101, "output_tokens": 867, "batch": true, "usd": 0.000322}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2120, "output_tokens": 1034, "batch": true, "usd": 0.000365}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2195, "output_tokens": 4469, "batch": true, "usd": 0.001227}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2633, "output_tokens": 1792, "batch": true, "usd": 0.00058}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 1902, "output_tokens": 1070, "batch": true, "usd": 0.000363}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2456, "output_tokens": 2700, "batch": true, "usd": 0.000798}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2133, "output_tokens": 1382, "batch": true, "usd": 0.000452}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2121, "output_tokens": 822, "batch": true, "usd": 0.000312}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2233, "output_tokens": 6271, "batch": true, "usd": 0.001679}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2197, "output_tokens": 2355, "batch": true, "usd": 0.000699}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2219, "output_tokens": 835, "batch": true, "usd": 0.00032}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 1990, "output_tokens": 274, "batch": true, "usd": 0.000168}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2112, "output_tokens": 952, "batch": true, "usd": 0.000344}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2315, "output_tokens": 2954, "batch": true, "usd": 0.000854}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2461, "output_tokens": 4679, "batch": true, "usd": 0.001293}
+{"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2047, "output_tokens": 1018, "batch": true, "usd": 0.000357}

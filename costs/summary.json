@@ -1,5 +1,5 @@
 {
- "total_usd": 25.413163,
+ "total_usd": 28.559566,
  "months": {
   "2026-10": {
    "usd": 9.860496,
@@ -17,14 +17,14 @@
    }
   },
   "2026-11": {
-   "usd": 15.552667,
-   "calls": 1466,
+   "usd": 18.69907,
+   "calls": 1628,
    "by_model": {
     "claude-haiku-5-5": {
-     "usd": 9.609478,
-     "calls": 992,
-     "input_tokens": 9887236,
-     "output_tokens": 802201
+     "usd": 12.755881,
+     "calls": 1154,
+     "input_tokens": 13021795,
+     "output_tokens": 922967
     },
     "claude-sonnet-5-5": {
      "usd": 5.943189,
@@ -35,9 +35,9 @@
    },
    "by_job": {
     "live": 0.011296,
-    "backfill": 15.541371
+    "backfill": 18.687774
    }
   }
  },
- "updated": "2026-11-10T10:45:00+00:00"
+ "updated": "2026-11-10T13:17:17+00:00"
 }
