@@ -19317,5 +19317,12 @@
     "scrape_status": "no_article",
     "warnings": [],
     "suspensions": []
+  },
+  "2026-11-10": {
+    "url": "https://www.rappler.com/philippines/class-suspensions-walang-pasok-november-10-2026/",
+    "has_suspensions": false,
+    "scrape_status": "no_article",
+    "warnings": [],
+    "suspensions": []
   }
 }
