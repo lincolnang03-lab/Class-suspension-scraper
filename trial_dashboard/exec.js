@@ -56,7 +56,7 @@
   };
 
   const params = new URLSearchParams(location.search);
-  const state = { year: "all", searchYear: "all", region: "", date: "", town: null, townAll: false };
+  const state = { year: "all", searchYear: "all", region: "", date: "", town: null, townAll: false, mapLevel: "province" };
   let H = null, LIVE = null, RECS = [], YEARS = [], PLACES = [], SEARCH = [], uniqueNames = new Set();
   let HOLIDAYS = new Set(), BREAKS = [];
 
@@ -71,6 +71,7 @@
   Promise.all([getJSON("history.json"), loadLive().catch(() => null), getJSON("places.json").catch(() => ({ places: [] })),
     getJSON("provinces.geojson").catch(() => null)])
     .then(([h, live, places, geo]) => {
+      if (geo) geo.features.forEach((f) => { f.properties.id = f.properties.name; });
       GEO = geo;
       H = h;
       LIVE = live;
@@ -151,6 +152,21 @@
     const drawYear = () => seg($("#f-year"), [["all", `All (${YEARS[0]}–${YEARS[YEARS.length - 1]})`], ...YEARS.map((y) => [y, yearLabel(y)])],
       state.year, (v) => { state.year = v; drawYear(); render(); });
     drawYear();
+    const drawLevel = () => seg($("#map-level"), [["province", "Provinces"], ["town", "Cities & towns"]], state.mapLevel, (v) => {
+      if (v === state.mapLevel) return;
+      state.mapLevel = v; drawLevel();
+      hovered = null; pick(null);
+      if (v === "town" && !TOWNS) {
+        $("#map-sub").textContent = "Loading every city and town…";
+        getJSON("towns.geojson").then((g) => {
+          g.features.forEach((f) => { const p = f.properties; p.id = `${p.province}|${p.name}`; });
+          TOWNS = g; renderMap(lastMapRs);
+        }).catch(() => { state.mapLevel = "province"; drawLevel(); renderMap(lastMapRs);
+          $("#map-sub").textContent = "Couldn't load the city and town map; showing provinces."; });
+      } else renderMap(lastMapRs);
+    });
+    drawLevel();
+    if (params.get("map") === "towns") $("#map-level").querySelectorAll("button")[1].click();   // a shared link to the town map
     const regions = unique(RECS.map((r) => r.region).filter(Boolean)).sort((a, b) => regionRank(a) - regionRank(b));
     $("#f-region").replaceChildren(el("option", { value: "", text: "All regions" }), ...regions.map((r) => el("option", { value: r, text: r })));
     $("#f-region").addEventListener("change", (e) => { state.region = e.target.value; render(); });
@@ -179,7 +195,8 @@
 
   // ── Overall: the map ───────────────────────────────────────────────────
   // Green (few) → yellow → red → dark red (most), by share of school days lost
-  let GEO = null, MAP = null, mapReady = false;
+  let GEO = null, TOWNS = null, MAP = null, mapReady = false;
+  const townLevel = () => state.mapLevel === "town" && TOWNS;
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const STOPS = [[0, "#cfeed7"], [0.12, "#34c759"], [0.38, "#ffd60a"], [0.62, "#ff9f0a"], [0.84, "#ff3b30"], [1, "#8a0f08"]];
   const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
@@ -229,9 +246,20 @@
         currentView = viewState;
       },
       onHover: (info) => { showTip(info); hover(info.object || null); },
-      // Click a province for its figures; click the sea to close them
-      onClick: (info) => { $("#map-tip").hidden = true; pick(info.object || null); },
       getCursor: ({ isDragging, isHovering }) => (isDragging ? "grabbing" : isHovering ? "pointer" : "grab"),
+    });
+    // Click a place for its figures; click the sea to close them. A press and release without dragging
+    // counts, however long finding the place takes (deck.gl drops slow clicks, which 1,600 towns can be
+    // on a computer without a graphics card)
+    let downAt = null;
+    $("#map").addEventListener("pointerdown", (e) => { downAt = e.isPrimary ? [e.clientX, e.clientY] : null; });
+    $("#map").addEventListener("pointerup", (e) => {
+      if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) { downAt = null; return; }
+      downAt = null;
+      const box = $("#map").getBoundingClientRect();
+      const info = MAP.pickObject({ x: e.clientX - box.left, y: e.clientY - box.top, radius: e.pointerType === "touch" ? 4 : 1 });
+      $("#map-tip").hidden = true;
+      pick(info ? info.object : null);
     });
     const zoomBy = (d) => flyTo({ ...currentView, zoom: Math.max(currentView.minZoom ?? 4, Math.min(11, currentView.zoom + d)) });
     $("#map-in").addEventListener("click", () => zoomBy(0.6));
@@ -254,11 +282,14 @@
     const f = info && info.object;
     if (!f) { tip.hidden = true; return; }
     const p = f.properties, st = p.stat, total = schoolDays();
+    const town = !!p.province;
     tip.replaceChildren(
-      el("p", { class: "t" }, p.name, el("span", { text: ` · ${p.region}` })),
+      el("p", { class: "t" }, p.name, el("span", { text: ` · ${town ? p.province : p.region}` })),
       st ? el("p", { class: "v" }, el("b", { text: pctText(st.days, total) }), ` of school days lost · ${st.days} of ${fmt(total)}`)
          : el("p", { class: "v", text: "No class suspensions recorded" }),
-      st ? el("p", { class: "s", text: `Mostly ${st.cause.toLowerCase()} · ${plural(st.towns, "city or town", "cities and towns")} affected` }) : null);
+      st ? el("p", { class: "s", text: town
+        ? `Mostly ${st.cause.toLowerCase()}` + (st.wide ? ` · ${plural(st.wide, "day")} under a province-wide order` : "")
+        : `Mostly ${st.cause.toLowerCase()} · ${plural(st.towns, "city or town", "cities and towns")} affected` }) : null);
     tip.hidden = false;
     const box = $("#map").getBoundingClientRect();
     const x = Math.min(info.x + 14, box.width - tip.offsetWidth - 8), y = Math.max(8, info.y - tip.offsetHeight - 12);
@@ -269,24 +300,24 @@
   let hovered = null, baseLayer = null, picked = null;
   const darker = (c, k = 0.82) => c.map((v, i) => (i < 3 ? Math.round(v * k) : v));
   function hover(f) {
-    if ((f && f.properties.name) === (hovered && hovered.properties.name)) return;
+    if ((f && f.properties.id) === (hovered && hovered.properties.id)) return;
     hovered = f;
     drawLayers();
   }
   function highlightLayers() {
     const data = baseLayer ? baseLayer.props.data : GEO.features;
-    return unique([picked, hovered && hovered.properties.name].filter(Boolean)).map((name) =>
-      new deck.GeoJsonLayer({ id: `outline-${name}`, data: data.filter((g) => g.properties.name === name), filled: true, stroked: true,
+    return unique([picked, hovered && hovered.properties.id].filter(Boolean)).map((id) =>
+      new deck.GeoJsonLayer({ id: `outline-${id}`, data: data.filter((g) => g.properties.id === id), filled: true, stroked: true,
         getFillColor: (g) => darker(g.__fill || [200, 200, 200, 255]), getLineColor: [29, 29, 31, 255],
-        lineWidthUnits: "pixels", getLineWidth: name === picked ? 3 : 2.5 }));
+        lineWidthUnits: "pixels", getLineWidth: id === picked ? 3 : 2.5 }));
   }
 
   // ── Overall: a province's figures in a panel over the map (the same as searching it, made compact) ──
   let panelAll = false;
   function pick(f) {
-    const name = f ? f.properties.name : null;
-    if (name === picked) return;
-    picked = name;
+    const id = f ? f.properties.id : null;
+    if (id === picked) return;
+    picked = id;
     panelAll = false;
     renderPanel();
     drawLayers();
@@ -294,9 +325,16 @@
   function renderPanel() {
     const box = $("#map-panel");
     if (!picked) { box.hidden = true; box.replaceChildren(); return; }
-    const shape = GEO.features.find((g) => g.properties.name === picked);
-    const p = SEARCH.find((s) => s.kind === "Province" && placeKey(s.name) === placeKey(picked))
-      || { kind: "Province", name: picked, province: picked, region: shape ? shape.properties.region : "" };
+    let p;
+    if (picked.includes("|")) {          // a city or town: "Province|Name"
+      const [prov, name] = picked.split("|");
+      p = PLACES.find((s) => s.province === prov && s.name === name);
+      if (!p) { picked = null; box.hidden = true; return; }
+    } else {
+      const shape = GEO.features.find((g) => g.properties.name === picked);
+      p = SEARCH.find((s) => s.kind === "Province" && placeKey(s.name) === placeKey(picked))
+        || { kind: "Province", name: picked, province: picked, region: shape ? shape.properties.region : "" };
+    }
     const { hits, lost, total, causes } = summary(p, state.year);
     const byDate = datesOf(hits);
     const allDates = [...byDate.keys()].sort().reverse();
@@ -309,7 +347,8 @@
     if (more) more.addEventListener("click", () => { panelAll = !panelAll; renderPanel(); });
     box.setAttribute("aria-label", `${p.name}: class suspensions`);
     box.replaceChildren(
-      el("div", { class: "mp-head" }, el("div", {}, el("h3", { text: p.name }), el("p", { text: `Province · ${p.region}` })), close),
+      el("div", { class: "mp-head" }, el("div", {}, el("h3", { text: p.name }),
+        el("p", { text: p.kind === "Province" ? `Province · ${p.region}` : `${p.kind} · ${p.province}, ${p.region}` })), close),
       el("div", { class: "mp-stat" }, el("p", { class: "v", text: pctText(lost.length, total) }),
         el("p", { class: "s", text: `of school days lost: ${lost.length} of ${fmt(total)}, ${sinceText(state.year)}` })),
       el("div", { class: "mp-tiles" }, dayTile(p, live, today, "Today", short), dayTile(p, live, addDays(today, 1), "Tomorrow", short)),
@@ -346,11 +385,12 @@
       : '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 8V3h5M17 8V3h-5M3 12v5h5M17 12v5h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     // Full screen: the scroll wheel zooms, since there's no page to scroll
     MAP.setProps({ controller: { scrollZoom: on, inertia: reduceMotion ? 0 : 350, dragRotate: false, touchRotate: false, keyboard: true } });
-    $("#map-hint").textContent = on ? "Drag to move · scroll, pinch or +/− to zoom · click a province · Esc to close" : "Drag to move · pinch or +/− to zoom · click a province";
+    $("#map-hint").textContent = on ? "Drag to move · scroll, pinch or +/− to zoom · click a place · Esc to close" : "Drag to move · pinch or +/− to zoom · click a place";
     if (!on) window.scrollTo(0, scrollBack);
   }
+  let provinceLines = null;
   function drawLayers() {
-    if (MAP && baseLayer) MAP.setProps({ layers: [baseLayer, ...highlightLayers()] });
+    if (MAP && baseLayer) MAP.setProps({ layers: [baseLayer, provinceLines, ...highlightLayers()].filter(Boolean) });
   }
 
   function renderMap(rs) {
@@ -360,23 +400,31 @@
       return;
     }
     const total = schoolDays();
-    const stats = new Map(provinceRows(rs).map((p) => [placeKey(p.province), p]));
+    const towns = townLevel();
+    const stats = towns ? townRows(rs) : new Map(provinceRows(rs).map((p) => [placeKey(p.province), p]));
     const maxPct = Math.max(0.01, ...[...stats.values()].map((p) => p.pct));
-    const key = `${state.year}|${state.region}`;
-    const data = GEO.features.map((f) => ({ ...f, properties: { ...f.properties, stat: stats.get(placeKey(f.properties.name)) || null } }));
+    const key = `${state.year}|${state.region}|${state.mapLevel}`;
+    const statOf = (f) => (towns ? stats.get(f.properties.id) : stats.get(placeKey(f.properties.name))) || null;
+    const data = (towns ? TOWNS : GEO).features.map((f) => ({ ...f, properties: { ...f.properties, stat: statOf(f) } }));
+    $("#map-sub").textContent = towns
+      ? "Each city and town's share of school days lost, counting its own orders and province-wide ones. Click one for its figures."
+      : "Each province's share of school days lost. Darker means more. Click a province for its figures.";
     const share = (f) => (f.properties.stat ? f.properties.stat.pct / maxPct : 0);
     const outside = (f) => state.region && f.properties.region !== state.region;
     const fill = (f) => (outside(f) ? [229, 229, 234, 255] : [...heat(f.properties.stat ? 0.08 + share(f) * 0.92 : 0), 255]);
     data.forEach((f) => { f.__fill = fill(f); });
-    if (hovered) hovered = data.find((f) => f.properties.name === hovered.properties.name && f.geometry === hovered.geometry) || null;
+    if (hovered) hovered = data.find((f) => f.properties.id === hovered.properties.id && f.geometry === hovered.geometry) || null;
     baseLayer = new deck.GeoJsonLayer({
-        id: "provinces", data, filled: true, stroked: true, pickable: true,
+        id: towns ? "towns" : "provinces", data, filled: true, stroked: true, pickable: true,
         getFillColor: (f) => f.__fill,
-        // thin white borders keep neighbouring provinces apart
-        getLineColor: [255, 255, 255, 230], lineWidthUnits: "pixels", getLineWidth: 0.8, lineWidthMinPixels: 0.5,
+        // thin white borders keep neighbours apart
+        getLineColor: [255, 255, 255, towns ? 150 : 230], lineWidthUnits: "pixels", getLineWidth: towns ? 0.4 : 0.8, lineWidthMinPixels: 0.3,
         transitions: reduceMotion ? {} : { getFillColor: { duration: 400 } },
         updateTriggers: { getFillColor: key },
       });
+    // On the town map, province borders drawn over the towns keep it readable
+    provinceLines = towns && GEO ? new deck.GeoJsonLayer({ id: "province-lines", data: GEO.features, filled: false, stroked: true,
+      pickable: false, getLineColor: [255, 255, 255, 255], lineWidthUnits: "pixels", getLineWidth: 1.4 }) : null;
     drawLayers();
     // Legend: the same colours, labelled with real percentages
     const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => `${Math.round(t * maxPct)}%`);
@@ -386,6 +434,35 @@
         el("div", { class: "lg-bar", style: `background:linear-gradient(90deg, ${STOPS.slice(1).map(([t, c]) => `${c} ${Math.round(((t - 0.12) / 0.88) * 100)}%`).join(", ")})` }),
         el("div", { class: "lg-ticks" }, ...ticks.map((t) => el("span", { text: t })))),
       el("span", { class: "lg-note", text: `of ${fmt(total)} school days lost${where()}` }));
+  }
+
+  // Every city and town's figures for the town map: the days a record covers it, the same rule as the
+  // search (covers()), indexed so 1,600 places × thousands of records stays fast. Keyed "Province|Name".
+  function townRows(rs) {
+    const add = (m, k, r) => { if (!m.has(k)) m.set(k, []); m.get(k).push(r); };
+    const city = new Map(), prov = new Map(), region = new Map(), national = [];
+    rs.forEach((r) => {
+      if (r.scope === "city") add(city, placeKey(r.city), r);
+      else if (r.scope === "province") add(prov, placeKey(r.province), r);
+      else if (r.scope === "region") add(region, r.region, r);
+      else if (r.scope === "national") national.push(r);
+    });
+    const total = schoolDays(), out = new Map();
+    PLACES.forEach((p) => {
+      const k = placeKey(p.name), pk = placeKey(p.province);
+      // its own orders: same province, or no province given, or a name only one town has (as covers() does)
+      const own = (city.get(k) || []).filter((r) => !r.province || uniqueNames.has(k) || placeKey(r.province) === pk);
+      const wide = [...((!p.independent || p.province === "Metro Manila") ? prov.get(pk) || [] : []),
+        ...(p.isCity ? prov.get(k) || [] : [])];
+      const all = [...own, ...wide, ...(region.get(p.region) || []), ...national];
+      if (!all.length) return;
+      const days = lostDays(all);
+      if (!days.length) return;
+      const causes = countBy(days, (d) => H.days[d].cause);
+      out.set(`${p.province}|${p.name}`, { days: days.length, pct: pct(days.length, total), wide: lostDays(wide).length,
+        cause: [...causes].sort((a, b) => b[1] - a[1])[0][0] });
+    });
+    return out;
   }
 
   // ── Overall: key figures ──────────────────────────────────────────────────
