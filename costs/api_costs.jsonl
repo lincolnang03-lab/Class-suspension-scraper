@@ -2227,3 +2227,5 @@
 {"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2315, "output_tokens": 2954, "batch": true, "usd": 0.000854}
 {"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2461, "output_tokens": 4679, "batch": true, "usd": 0.001293}
 {"time": "2026-11-10T13:17:17+00:00", "job": "backfill structure", "model": "claude-haiku-5-5", "input_tokens": 2047, "output_tokens": 1018, "batch": true, "usd": 0.000357}
+{"time": "2026-11-11T22:06:30+00:00", "job": "live scheduled", "model": "claude-haiku-5-5", "input_tokens": 1871, "output_tokens": 29, "usd": 0.000202}
+{"time": "2026-11-11T22:06:30+00:00", "job": "live scheduled", "model": "claude-haiku-5-5", "input_tokens": 1077, "output_tokens": 230, "usd": 0.000223}
