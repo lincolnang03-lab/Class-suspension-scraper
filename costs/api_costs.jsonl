@@ -2243,3 +2243,5 @@
 {"time": "2026-11-20T21:48:19+00:00", "job": "live scheduled", "model": "claude-sonnet-5-5", "input_tokens": 2141, "output_tokens": 613, "usd": 0.010412}
 {"time": "2026-11-20T21:48:19+00:00", "job": "live scheduled", "model": "claude-haiku-5-5", "input_tokens": 1767, "output_tokens": 29, "usd": 0.000191}
 {"time": "2026-11-21T21:40:24+00:00", "job": "live scheduled", "model": "claude-haiku-5-5", "input_tokens": 1696, "output_tokens": 30, "usd": 0.000185}
+{"time": "2026-11-22T21:42:49+00:00", "job": "live scheduled", "model": "claude-haiku-5-5", "input_tokens": 1627, "output_tokens": 889, "usd": 0.000607}
+{"time": "2026-11-22T21:42:49+00:00", "job": "live scheduled", "model": "claude-sonnet-5-5", "input_tokens": 2779, "output_tokens": 1778, "usd": 0.023338}
